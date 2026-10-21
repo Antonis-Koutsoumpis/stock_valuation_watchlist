@@ -41,6 +41,10 @@ QUARTERLY_METRICS = {
 DCF_METRICS = {"dcf_low": "DCF low end", "dcf_middle": "DCF middle", "dcf_high": "DCF high end"}
 ALL_METRICS = {**DAILY_METRICS, **QUARTERLY_METRICS, **DCF_METRICS}
 PERCENT = {"roic_ttm", "roic", "trailing_div_yield", "forward_div_yield", "payout_ratio"}
+YEARLY_LABELS = {"roic": "ROIC", "bvps": "BVPS", "revenue": "Revenue", "eps_diluted": "EPS",
+                 "fcf": "Free Cash Flow", "net_debt_fcf": "Net Debt / FCF", "total_debt": "Debt",
+                 "dividends": "Dividends", "payout_ratio": "Payout ratio",
+                 "shares_outstanding": "Shares outstanding"}
 RULE1_LABELS = {"roic": "ROIC", "bvps": "BVPS", "revenue": "Revenue", "eps_diluted": "EPS",
                 "fcf": "Free Cash Flow", "net_debt_fcf": "Net Debt / FCF"}
 
@@ -197,7 +201,9 @@ with tab_y:
         cols = ["roic", "bvps", "revenue", "eps_diluted", "fcf", "net_debt_fcf", "total_debt",
                 "dividends", "payout_ratio", "shares_outstanding"]
         t = a_df[[c for c in cols if c in a_df]].sort_index(ascending=False)
-        st.dataframe(t.apply(lambda col: col.map(lambda v: fmt(v, col.name))), use_container_width=True)
+        t = t.apply(lambda col: col.map(lambda v: fmt(v, col.name)))
+        t.columns = [YEARLY_LABELS.get(c, c) for c in t.columns]
+        st.dataframe(t, use_container_width=True)
 with tab_q:
     if not q_df.empty:
         cols = ["revenue", "revenue_ttm", "eps_diluted", "eps_diluted_ttm", "fcf", "fcf_ttm", "roic_ttm",
