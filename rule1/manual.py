@@ -15,9 +15,11 @@ TABS = {
     "statements": ["ticker", "period", "metric", "value", "note"],
     "daily": ["ticker", "date", "metric", "value", "note"],
     "dcf": ["ticker", "quarter", "valueinvesting", "alphaspread", "simplywallstreet",
-            "gurufocus_eps", "gurufocus_fcf", "financecharts_fcf", "financecharts_eps", "middle", "note"],
+            "gurufocus_eps", "gurufocus_fcf", "financecharts_fcf", "financecharts_eps", "middle",
+            "dcf_low", "dcf_average", "dcf_high", "note"],
 }
 DCF_SOURCES = TABS["dcf"][2:9]
+DCF_OVERRIDES = ["dcf_low", "dcf_average", "dcf_high"]  # typed-in range; wins over the calculated one
 
 
 def _sheet_url(sheet_id: str, tab: str) -> str:
@@ -40,7 +42,7 @@ def _clean(df: pd.DataFrame, tab: str) -> pd.DataFrame:
         df = df.dropna(subset=["date", "value"])
     else:
         df["quarter"] = df["quarter"].astype(str).str.strip().str.upper()
-        for col in DCF_SOURCES:
+        for col in DCF_SOURCES + DCF_OVERRIDES:
             df[col] = pd.to_numeric(df[col], errors="coerce")
         df["middle"] = df["middle"].fillna("median").astype(str).str.strip().str.lower()
     return df.reset_index(drop=True)

@@ -7,7 +7,7 @@ ROIC = NOPAT / (Debt + Equity); FCF = Operating Cash Flow - CapEx.
 import numpy as np
 import pandas as pd
 
-from .manual import DCF_SOURCES
+from .manual import DCF_OVERRIDES, DCF_SOURCES
 from .periods import quarter_end
 
 SOURCE_PRIORITY = {"manual": 0, "sec": 1, "yahoo": 2}
@@ -188,18 +188,27 @@ def daily(prices: pd.DataFrame, quarterly_df: pd.DataFrame, manual_daily: pd.Dat
 
 def dcf(manual_dcf: pd.DataFrame, ticker: str) -> pd.DataFrame:
     """Per quarter: low end (avg of 3 lowest), mean, median, high end (avg of 3 highest),
-    and the chosen middle (mean or median)."""
+    and the chosen middle (mean or median). Values typed into dcf_low / dcf_average /
+    dcf_high win over the calculated ones."""
     df = manual_dcf[manual_dcf["ticker"] == ticker]
     rows = []
     for r in df.itertuples():
         vals = sorted(v for v in (getattr(r, s) for s in DCF_SOURCES) if pd.notna(v))
-        if not vals:
+        typed = {c: getattr(r, c, np.nan) for c in DCF_OVERRIDES}
+        if not vals and all(pd.isna(v) for v in typed.values()):
             continue
-        mean, median = float(np.mean(vals)), float(np.median(vals))
-        rows.append({
+        mean = float(np.mean(vals)) if vals else np.nan
+        median = float(np.median(vals)) if vals else np.nan
+        row = {
             "quarter": r.quarter, "n_estimates": len(vals),
-            "low": float(np.mean(vals[:3])), "mean": mean, "median": median,
-            "high": float(np.mean(vals[-3:])),
+            "low": float(np.mean(vals[:3])) if vals else np.nan, "mean": mean, "median": median,
+            "high": float(np.mean(vals[-3:])) if vals else np.nan,
             "middle": median if r.middle != "mean" else mean, "middle_choice": r.middle,
-        })
+        }
+        for col, key in [("dcf_low", "low"), ("dcf_average", "middle"), ("dcf_high", "high")]:
+            if pd.notna(typed[col]):
+                row[key] = float(typed[col])
+                if key == "middle":
+                    row["middle_choice"] = "typed in"
+        rows.append(row)
     return pd.DataFrame(rows).set_index("quarter").sort_index() if rows else pd.DataFrame()

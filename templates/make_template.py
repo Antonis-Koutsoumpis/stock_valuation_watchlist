@@ -50,6 +50,7 @@ HELP = [
     "daily: rarely needed. date = YYYY-MM-DD.",
     "dcf: one row per stock per quarter with the 7 site estimates (leave a cell empty if a site has none).",
     "  middle = median or mean: which one the tool uses as the middle of the DCF range.",
+    "  dcf_low / dcf_average / dcf_high: optional. Type your own range here; it wins over the calculated one.",
     "metric: pick from the dropdown; the list with descriptions is on the 'metrics' tab.",
     "ticker: as on the watchlist (AMZN, FTK).",
     "Manual values always win over automatically extracted ones.",
@@ -97,7 +98,8 @@ def main():
     ex.append(["FTK", "2019", "total_debt", 45000000, "a yearly value"])
     ex.append([])
     ex.append(TABS["dcf"])
-    ex.append(["AMZN", "2026Q4", 100, 110, 120, 130, 140, 150, 160, "median", ""])
+    ex.append(["AMZN", "2026Q4", 100, 110, 120, 130, 140, 150, 160, "median", "", "", "", "7 site estimates"])
+    ex.append(["FTK", "2026Q4", "", "", "", "", "", "", "", "", 100, 120, 140, "own range typed in"])
     wb.save(OUT)
     print(f"wrote {OUT}")
 

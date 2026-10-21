@@ -137,3 +137,49 @@ def test_daily_back_calculates_pe_until_snapshot():
     d = metrics.daily(prices, q, pd.DataFrame(columns=["ticker", "date", "metric", "value"]))
     assert d["trailing_pe"].tolist() == [20.0, 22.0]  # 80 / TTM EPS 4, then Yahoo's value
     assert d["price_book"].iloc[0] == pytest.approx(80 / 30)
+
+
+def test_typed_in_dcf_range_wins():
+    man = pd.DataFrame([{"ticker": "FTK", "quarter": "2026Q1", "valueinvesting": 10, "alphaspread": 20,
+                         "simplywallstreet": 30, "gurufocus_eps": np.nan, "gurufocus_fcf": np.nan,
+                         "financecharts_fcf": np.nan, "financecharts_eps": np.nan, "middle": "median",
+                         "dcf_low": np.nan, "dcf_average": 25.0, "dcf_high": 40.0},
+                        {"ticker": "FTK", "quarter": "2026Q2", "valueinvesting": np.nan, "alphaspread": np.nan,
+                         "simplywallstreet": np.nan, "gurufocus_eps": np.nan, "gurufocus_fcf": np.nan,
+                         "financecharts_fcf": np.nan, "financecharts_eps": np.nan, "middle": "median",
+                         "dcf_low": 5.0, "dcf_average": 6.0, "dcf_high": 7.0}])
+    d = metrics.dcf(man, "FTK")
+    assert (d.loc["2026Q1", "low"], d.loc["2026Q1", "middle"], d.loc["2026Q1", "high"]) == (20, 25, 40)
+    assert (d.loc["2026Q2", "low"], d.loc["2026Q2", "middle"], d.loc["2026Q2", "high"]) == (5, 6, 7)
+
+
+def test_trend_lines():
+    from rule1 import charts
+    idx = pd.date_range("2016-01-01", periods=11, freq="YS")
+    grow = pd.Series(100 * 1.1 ** np.arange(11), index=idx)
+    fitted, label = charts.trend(grow, "Log")
+    assert fitted.iloc[-1] == pytest.approx(grow.iloc[-1], rel=1e-3)
+    assert "+10.0%/yr" in label
+    line = pd.Series(np.arange(11) * 2.0 + 1, index=idx)
+    fitted, _ = charts.trend(line, "Linear")
+    assert fitted.values == pytest.approx(line.values, abs=0.05)
+    fitted, label = charts.trend(grow, "Polynomial", 3)
+    assert len(fitted) == 11 and "degree 3" in label
+
+
+def test_trailing_average():
+    from rule1 import charts
+    idx = pd.date_range("2010-01-01", "2025-12-31", freq="QS")
+    s = pd.Series(np.where(idx.year >= 2021, 20.0, 10.0), index=idx)
+    _, _, five = charts.trailing_average(s, 5)
+    assert five == pytest.approx(20.0, abs=1.0)
+    assert charts.trailing_average(s[s.index.year >= 2022], 10) is None  # not enough history
+
+
+def test_screener_and_filters():
+    from rule1 import screener
+    table = pd.DataFrame({"roic_ttm": [0.15, 0.05, np.nan], "bvps": [12.0, 20.0, 30.0]}, index=["A", "B", "C"])
+    table = table.reindex(columns=list(screener.COLUMNS))
+    cond = pd.DataFrame([{"metric": "ROIC (TTM)", "operator": ">", "value": 10},
+                         {"metric": "BVPS", "operator": ">", "value": 10}])
+    assert list(screener.apply_filters(table, cond).index) == ["A"]

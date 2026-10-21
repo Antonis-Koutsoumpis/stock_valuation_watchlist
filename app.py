@@ -4,49 +4,18 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from rule1 import manual, metrics
+from rule1 import charts, manual, metrics, screener
+from rule1.glossary import CAGR_HELP, DAILY, DCF, GRAPH, QUARTERLY, YEARLY, Metric
 from rule1.periods import quarter_end, quarter_start
 from rule1.store import DATA_DIR, read_csv
 from rule1.update import load_watchlist
 
 st.set_page_config(page_title="Rule #1 Watchlist", layout="wide")
 
-DAILY_METRICS = {
-    "close": "Price",
-    "volume": "Volume",
-    "trailing_pe": "Trailing P/E",
-    "forward_pe": "Forward P/E",
-    "peg_5y": "PEG ratio (5yr expected)",
-    "price_sales": "Price/Sales",
-    "price_book": "Price/Book",
-    "trailing_div_yield": "Trailing annual dividend yield",
-    "forward_div_yield": "Forward annual dividend yield",
-    "payout_ratio": "Payout ratio",
-    "market_cap": "Market cap",
-}
-QUARTERLY_METRICS = {
-    "revenue": "Revenue (quarter)",
-    "revenue_ttm": "Revenue (TTM)",
-    "eps_diluted": "EPS (quarter)",
-    "eps_diluted_ttm": "EPS (TTM)",
-    "fcf": "Free cash flow (quarter)",
-    "fcf_ttm": "Free cash flow (TTM)",
-    "roic_ttm": "ROIC (TTM)",
-    "bvps": "BVPS",
-    "total_debt": "Debt",
-    "net_debt_fcf_ttm": "Net Debt / FCF (TTM)",
-    "dividends_ttm": "Dividends (TTM)",
-    "shares_outstanding": "Shares outstanding",
-}
-DCF_METRICS = {"dcf_low": "DCF low end", "dcf_middle": "DCF middle", "dcf_high": "DCF high end"}
-ALL_METRICS = {**DAILY_METRICS, **QUARTERLY_METRICS, **DCF_METRICS}
-PERCENT = {"roic_ttm", "roic", "trailing_div_yield", "forward_div_yield", "payout_ratio"}
-YEARLY_LABELS = {"roic": "ROIC", "bvps": "BVPS", "revenue": "Revenue", "eps_diluted": "EPS",
-                 "fcf": "Free Cash Flow", "net_debt_fcf": "Net Debt / FCF", "total_debt": "Debt",
-                 "dividends": "Dividends", "payout_ratio": "Payout ratio",
-                 "shares_outstanding": "Shares outstanding"}
-RULE1_LABELS = {"roic": "ROIC", "bvps": "BVPS", "revenue": "Revenue", "eps_diluted": "EPS",
-                "fcf": "Free Cash Flow", "net_debt_fcf": "Net Debt / FCF"}
+COLORS = ["#1f77b4", "#d62728", "#9467bd", "#ff7f0e"]
+DCF_FILL = "rgba(46, 139, 87, 0.22)"
+DCF_LINE = "rgba(46, 139, 87, 0.9)"
+QUARTER_BAR_WIDTH = 75 * 24 * 3600 * 1000  # ms
 
 
 def secret(name: str):
@@ -76,10 +45,10 @@ def load_stock(ticker: str):
     return d, q, a, metrics.dcf(m["dcf"], ticker)
 
 
-def fmt(value, metric=""):
-    if pd.isna(value):
+def fmt(value, percent=False):
+    if value is None or pd.isna(value):
         return ""
-    if metric in PERCENT:
+    if percent:
         return f"{value:.1%}"
     if abs(value) >= 1e9:
         return f"{value / 1e9:,.2f} B"
@@ -88,135 +57,245 @@ def fmt(value, metric=""):
     return f"{value:,.2f}"
 
 
-# ---- Sidebar: search and chart options ----
-watchlist = load_watchlist()
-options = [f"{r.ticker} · {r.name}" for r in watchlist.itertuples()]
-choice = st.sidebar.selectbox("Find a stock", options, index=0, placeholder="Type a name or ticker")
-ticker = choice.split(" · ")[0]
-stock = watchlist.set_index("ticker").loc[ticker]
-
-daily_df, q_df, a_df, dcf_df = load_stock(ticker)
-
-st.sidebar.markdown("### Graph")
-available = [m for m in ALL_METRICS
-             if (m in daily_df and daily_df[m].notna().any())
-             or (m in q_df and q_df[m].notna().any())
-             or (m in DCF_METRICS and not dcf_df.empty)]
-selected = st.sidebar.multiselect("Variables", available, default=["close"],
-                                  format_func=lambda m: ALL_METRICS[m], max_selections=4)
-log_scale = st.sidebar.radio("Scale", ["Raw", "Logarithmic"], horizontal=True) == "Logarithmic"
-needs_quarterly = any(m in QUARTERLY_METRICS for m in selected)
-freq = st.sidebar.radio("Frequency", ["Daily", "Quarterly (daily values averaged)"],
-                        index=1 if needs_quarterly else 0, disabled=needs_quarterly,
-                        help="Graphs with quarterly metrics always average daily values per quarter.")
-quarterly_mode = needs_quarterly or freq.startswith("Quarterly")
-show_dcf = st.sidebar.checkbox("Show DCF range behind the price", value=not dcf_df.empty,
-                               disabled=dcf_df.empty)
-
-# ---- Header ----
-st.title(f"{stock['name']} ({ticker})")
-if daily_df.empty:
-    st.warning("No data stored for this stock yet. It appears after the next daily update.")
-    st.stop()
-last = daily_df.dropna(subset=["close"]).iloc[-1]
-cols = st.columns(5)
-cols[0].metric(f"Price ({stock['currency']})", fmt(last["close"]), help=f"Close on {last.name:%d %b %Y}")
-cols[1].metric("Trailing P/E", fmt(last.get("trailing_pe")))
-cols[2].metric("Forward P/E", fmt(last.get("forward_pe")))
-cols[3].metric("ROIC (TTM)", fmt(q_df["roic_ttm"].dropna().iloc[-1] if "roic_ttm" in q_df and q_df["roic_ttm"].notna().any() else None, "roic"))
-if not dcf_df.empty:
-    latest = dcf_df.iloc[-1]
-    cols[4].metric(f"DCF middle ({dcf_df.index[-1]})", fmt(latest["middle"]),
-                   help=f"Range {fmt(latest['low'])} to {fmt(latest['high'])}")
-
-# ---- Graph ----
-def series_for(metric: str) -> pd.Series:
-    if metric in DCF_METRICS:
-        s = dcf_df[metric.removeprefix("dcf_")] if not dcf_df.empty else pd.Series(dtype=float)
-        s.index = [quarter_end(p) for p in s.index]
-        return s
-    if metric in QUARTERLY_METRICS:
-        s = q_df[metric].dropna()
-        s.index = [quarter_end(p) for p in s.index]
-        return s
-    s = daily_df[metric].dropna()
-    if quarterly_mode:
-        s = s.groupby(s.index.to_period("Q")).mean()
-        s.index = s.index.to_timestamp(how="end").normalize()
-    return s
+def quarter_mid(label: str) -> pd.Timestamp:
+    start = quarter_start(label)
+    return start + (quarter_end(label) - start) / 2
 
 
-fig = go.Figure()
-axis_slots = [("left", 0.0), ("right", 1.0), ("left", 0.06), ("right", 0.94)]
-price_axis = None
-for i, metric in enumerate(selected):
-    s = series_for(metric)
-    axis = "y" if i == 0 else f"y{i + 1}"
-    if metric == "close":
-        price_axis = axis
-    shape = "hv" if (metric in DCF_METRICS and not quarterly_mode) else "linear"
-    fig.add_trace(go.Scatter(x=s.index, y=s.values, name=ALL_METRICS[metric], yaxis=axis,
-                             mode="lines+markers" if quarterly_mode else "lines", line_shape=shape))
-    side, pos = axis_slots[i]
-    layout_key = "yaxis" if i == 0 else f"yaxis{i + 1}"
-    spec = dict(title=ALL_METRICS[metric], side=side, type="log" if log_scale else "linear",
-                tickformat=".0%" if metric in PERCENT else None, showgrid=i == 0)
-    if i:
-        spec.update(overlaying="y", anchor="free", position=pos, autoshift=True)
-    fig.update_layout({layout_key: spec})
+def show_table(df: pd.DataFrame, glossary: dict):
+    """Formatted table; hovering a column header shows what the metric means."""
+    cols = [c for c in glossary if c in df]
+    t = df[cols].sort_index(ascending=False)
+    t = t.apply(lambda col: col.map(lambda v: fmt(v, glossary[col.name].percent)))
+    t.columns = [glossary[c].label for c in cols]
+    config = {glossary[c].label: st.column_config.Column(help=glossary[c].tooltip) for c in cols}
+    st.dataframe(t, use_container_width=True, column_config=config)
 
-if show_dcf and not dcf_df.empty and price_axis:
-    band = dcf_df[["low", "middle", "high"]]
-    if quarterly_mode:
-        x, shape = [quarter_end(p) for p in band.index], "linear"
-    else:  # each quarter's range holds from the start of that quarter
-        x = [quarter_start(p) for p in band.index] + [quarter_end(band.index[-1])]
-        band, shape = pd.concat([band, band.iloc[[-1]]]), "hv"
-    grey = "rgba(120, 120, 120, 0.8)"
-    fig.add_trace(go.Scatter(x=x, y=band["low"], yaxis=price_axis, name="DCF low end", mode="lines",
-                             line=dict(width=1, color=grey), line_shape=shape))
-    fig.add_trace(go.Scatter(x=x, y=band["high"], yaxis=price_axis, name="DCF high end", mode="lines",
-                             line=dict(width=1, color=grey), line_shape=shape,
-                             fill="tonexty", fillcolor="rgba(120, 120, 120, 0.15)"))
-    fig.add_trace(go.Scatter(x=x, y=band["middle"], yaxis=price_axis, name="DCF middle", mode="lines",
-                             line=dict(width=1.5, dash="dash", color="rgba(60, 60, 60, 1)"), line_shape=shape))
 
-fig.update_layout(height=520, hovermode="x unified", margin=dict(l=60, r=60, t=30, b=30),
-                  legend=dict(orientation="h", y=-0.12), xaxis=dict(domain=[0.08, 0.92]))
-st.plotly_chart(fig, use_container_width=True)
+# ---------------------------------------------------------------- stock page
+def stock_page():
+    watchlist = load_watchlist()
+    options = [f"{r.ticker} · {r.name}" for r in watchlist.itertuples()]
+    choice = st.sidebar.selectbox("Find a stock", options, index=0, placeholder="Type a name or ticker")
+    ticker = choice.split(" · ")[0]
+    stock = watchlist.set_index("ticker").loc[ticker]
+    daily_df, q_df, a_df, dcf_df = load_stock(ticker)
 
-# ---- Rule #1 tables ----
-st.subheader("Rule #1 growth (CAGR, latest year)")
-growth = metrics.growth_table(a_df)
-if growth.empty:
-    st.info("Not enough yearly data yet.")
-else:
-    growth.index = [RULE1_LABELS[m] for m in growth.index]
-    st.dataframe(growth.map(lambda v: "" if pd.isna(v) else f"{v:.1%}"), use_container_width=True)
-    st.caption("Empty cells: not enough history yet, or a start/end value that is zero or negative.")
+    st.title(f"{stock['name']} ({ticker})")
+    if daily_df.empty:
+        st.warning("No data stored for this stock yet. It appears after the next daily update.")
+        return
 
-tab_y, tab_q, tab_dcf = st.tabs(["Yearly", "Quarterly", "DCF estimates"])
-with tab_y:
-    if not a_df.empty:
-        cols = ["roic", "bvps", "revenue", "eps_diluted", "fcf", "net_debt_fcf", "total_debt",
-                "dividends", "payout_ratio", "shares_outstanding"]
-        t = a_df[[c for c in cols if c in a_df]].sort_index(ascending=False)
-        t = t.apply(lambda col: col.map(lambda v: fmt(v, col.name)))
-        t.columns = [YEARLY_LABELS.get(c, c) for c in t.columns]
-        st.dataframe(t, use_container_width=True)
-with tab_q:
-    if not q_df.empty:
-        cols = ["revenue", "revenue_ttm", "eps_diluted", "eps_diluted_ttm", "fcf", "fcf_ttm", "roic_ttm",
-                "bvps", "total_debt", "cash", "net_debt_fcf_ttm", "dividends_ttm", "shares_outstanding"]
-        t = q_df[[c for c in cols if c in q_df]].sort_index(ascending=False)
-        t = t.apply(lambda col: col.map(lambda v: fmt(v, col.name)))
-        t.columns = [QUARTERLY_METRICS.get(c, c.replace("_", " ")) for c in t.columns]
-        st.dataframe(t, use_container_width=True)
-with tab_dcf:
-    if dcf_df.empty:
-        st.info("No DCF estimates entered yet. Add them in the manual-entry sheet, tab 'dcf'.")
+    # ---- Sidebar: graph options ----
+    st.sidebar.markdown("### Graph")
+    available = [m for m in GRAPH
+                 if (m in daily_df and daily_df[m].notna().any())
+                 or (m in q_df and q_df[m].notna().any())
+                 or (m in DCF and not dcf_df.empty)]
+    selected = st.sidebar.multiselect(
+        "Variables", available, default=["close"], format_func=lambda m: GRAPH[m].label, max_selections=4,
+        help="Up to 4, each with its own axis. Hover the ? next to each name under the graph to see what it means.")
+
+    first, last_day = daily_df.index.min().date(), daily_df.index.max().date()
+    picked = st.sidebar.date_input("Time range", value=(first, last_day), min_value=first, max_value=last_day,
+                                   help="Or drag across the graph to zoom in, and double-click it to zoom back out.")
+    start, end = (pd.Timestamp(picked[0]), pd.Timestamp(picked[1])) if len(picked) == 2 else (pd.Timestamp(first), pd.Timestamp(last_day))
+
+    log_scale = st.sidebar.radio("Scale", ["Raw", "Logarithmic"], horizontal=True) == "Logarithmic"
+    needs_quarterly = any(m in QUARTERLY or m in DCF for m in selected)
+    freq = st.sidebar.radio("Frequency", ["Daily", "Quarterly"], horizontal=True,
+                            index=1 if needs_quarterly else 0, disabled=needs_quarterly,
+                            help="Quarterly averages the daily values of each quarter and shows the price as bars. "
+                                 "Graphs with quarterly metrics are always quarterly.")
+    quarterly_mode = needs_quarterly or freq == "Quarterly"
+    bar_values = st.sidebar.toggle("Show values on bars", value=False, disabled=not quarterly_mode)
+
+    trends = st.sidebar.multiselect(
+        "Trend lines", charts.TRENDS,
+        help="Linear: straight line. Polynomial: a curve that can bend. "
+             "Log: constant growth per year (a straight line on a log scale); the legend shows the yearly growth.")
+    degree = st.sidebar.slider("Polynomial degree", 2, 5, 2) if "Polynomial" in trends else 2
+    averages = st.sidebar.multiselect(
+        "Average lines", [5, 10], format_func=lambda y: f"{y}-year average",
+        help="Dotted line at the average of each variable over the last 5 or 10 years of the time range.")
+    show_dcf = st.sidebar.checkbox(
+        "Show DCF range boxes", value=not dcf_df.empty, disabled=dcf_df.empty or "close" not in selected,
+        help="One box per quarter from the DCF low end to the high end, with the middle as a line. "
+             "Shown with the Price variable.")
+
+    # ---- Header ----
+    last = daily_df.dropna(subset=["close"]).iloc[-1]
+    roic = q_df["roic_ttm"].dropna().iloc[-1] if "roic_ttm" in q_df and q_df["roic_ttm"].notna().any() else None
+    cols = st.columns(5)
+    cols[0].metric(f"Price ({stock['currency']})", fmt(last["close"]),
+                   help=f"{DAILY['close'].tooltip}\n\nClose on {last.name:%d %b %Y}.")
+    cols[1].metric("Trailing P/E", fmt(last.get("trailing_pe")), help=DAILY["trailing_pe"].tooltip)
+    cols[2].metric("Forward P/E", fmt(last.get("forward_pe")), help=DAILY["forward_pe"].tooltip)
+    cols[3].metric("ROIC (TTM)", fmt(roic, percent=True), help=QUARTERLY["roic_ttm"].tooltip)
+    if not dcf_df.empty:
+        latest = dcf_df.iloc[-1]
+        cols[4].metric(f"DCF middle ({dcf_df.index[-1]})", fmt(latest["middle"]),
+                       help=f"{DCF['dcf_middle'].tooltip}\n\nRange {fmt(latest['low'])} to {fmt(latest['high'])}.")
+
+    # ---- Graph ----
+    def series_for(metric: str) -> pd.Series:
+        if metric in DCF:
+            s = dcf_df[metric.removeprefix("dcf_")].dropna()
+            s.index = pd.DatetimeIndex([quarter_mid(p) for p in s.index])
+        elif metric in QUARTERLY:
+            s = q_df[metric].dropna()
+            s.index = pd.DatetimeIndex([quarter_mid(p) for p in s.index])
+        else:
+            s = daily_df[metric].dropna()
+            if quarterly_mode:
+                s = s.groupby(s.index.to_period("Q")).mean()
+                s.index = pd.DatetimeIndex([quarter_mid(str(p)) for p in s.index])
+        return s[(s.index >= start) & (s.index <= end + pd.Timedelta(days=1))]
+
+    fig = go.Figure()
+    axis_slots = [("left", 0.0), ("right", 1.0), ("left", 0.06), ("right", 0.94)]
+    price_axis = None
+    for i, metric in enumerate(selected):
+        meta, color = GRAPH[metric], COLORS[i]
+        s = series_for(metric)
+        axis = "y" if i == 0 else f"y{i + 1}"
+        if metric == "close":
+            price_axis = axis
+        if metric == "close" and quarterly_mode:
+            fig.add_trace(go.Bar(
+                x=s.index, y=s.values, name=f"{meta.label} (quarter average)", yaxis=axis, width=QUARTER_BAR_WIDTH,
+                marker_color=color, opacity=0.65,
+                text=[fmt(v) for v in s.values] if bar_values else None, textposition="outside"))
+        else:
+            fig.add_trace(go.Scatter(x=s.index, y=s.values, name=meta.label, yaxis=axis,
+                                     mode="lines+markers" if quarterly_mode else "lines", line=dict(color=color),
+                                     text=[fmt(v) for v in s.values] if bar_values and quarterly_mode else None,
+                                     textposition="top center"))
+            if bar_values and quarterly_mode:
+                fig.data[-1].mode = "lines+markers+text"
+        for kind in trends:
+            fitted, label = charts.trend(s, kind, degree)
+            if not fitted.empty:
+                fig.add_trace(go.Scatter(x=fitted.index, y=fitted.values, name=f"{meta.label}: {label}", yaxis=axis,
+                                         mode="lines", line=dict(color=color, dash="dash", width=1.5)))
+        for years in averages:
+            avg = charts.trailing_average(s, years)
+            if avg:
+                a_start, a_end, value = avg
+                fig.add_trace(go.Scatter(
+                    x=[a_start, a_end], y=[value, value], yaxis=axis, mode="lines",
+                    name=f"{meta.label}: {years}-yr average ({fmt(value, meta.percent)})",
+                    line=dict(color=color, dash="dot", width=2)))
+        side, pos = axis_slots[i]
+        spec = dict(title=meta.label, side=side, type="log" if log_scale else "linear",
+                    tickformat=".0%" if meta.percent else None, showgrid=i == 0)
+        if i:
+            spec.update(overlaying="y", anchor="free", position=pos, autoshift=True)
+        fig.update_layout({"yaxis" if i == 0 else f"yaxis{i + 1}": spec})
+
+    if show_dcf and not dcf_df.empty and price_axis:
+        box_x, box_y, mid_x, mid_y, mid_text = [], [], [], [], []
+        for q, r in dcf_df.iterrows():
+            q0, q1 = quarter_start(q), quarter_end(q)
+            if q1 < start or q0 > end or pd.isna(r["low"]) or pd.isna(r["high"]):
+                continue
+            box_x += [q0, q1, q1, q0, q0, None]
+            box_y += [r["low"], r["low"], r["high"], r["high"], r["low"], None]
+            if pd.notna(r["middle"]):
+                text = f"DCF {q}: {fmt(r['low'])} to {fmt(r['high'])}, middle {fmt(r['middle'])}"
+                mid_x += [q0, q1, None]
+                mid_y += [r["middle"], r["middle"], None]
+                mid_text += [text, text, None]
+        fig.add_trace(go.Scatter(x=box_x, y=box_y, yaxis=price_axis, fill="toself", fillcolor=DCF_FILL,
+                                 line=dict(color=DCF_LINE, width=0.5), mode="lines", name="DCF range (low to high)",
+                                 hoverinfo="skip", legendgroup="dcf"))
+        fig.add_trace(go.Scatter(x=mid_x, y=mid_y, yaxis=price_axis, mode="lines", name="DCF middle",
+                                 line=dict(color=DCF_LINE, width=2), text=mid_text, hovertemplate="%{text}<extra></extra>",
+                                 legendgroup="dcf"))
+
+    fig.update_layout(
+        height=580, hovermode="x unified", margin=dict(l=60, r=60, t=40, b=30), bargap=0,
+        legend=dict(orientation="h", y=-0.28),
+        xaxis=dict(domain=[0.08, 0.92], range=[start, end + pd.Timedelta(days=1)],
+                   rangeslider=dict(visible=True, thickness=0.06),
+                   rangeselector=dict(buttons=[
+                       dict(count=1, label="1y", step="year", stepmode="backward"),
+                       dict(count=3, label="3y", step="year", stepmode="backward"),
+                       dict(count=5, label="5y", step="year", stepmode="backward"),
+                       dict(count=10, label="10y", step="year", stepmode="backward"),
+                       dict(step="all", label="All")])))
+    st.plotly_chart(fig, use_container_width=True)
+
+    if selected:
+        legend_cols = st.columns(len(selected))
+        for col, metric in zip(legend_cols, selected):
+            col.markdown(f"**{GRAPH[metric].label}**", help=GRAPH[metric].tooltip)
+
+    # ---- Rule #1 tables ----
+    st.subheader("Rule #1 growth (CAGR, latest year)", help=CAGR_HELP)
+    growth = metrics.growth_table(a_df)
+    if growth.empty:
+        st.info("Not enough yearly data yet.")
     else:
-        st.dataframe(dcf_df.sort_index(ascending=False), use_container_width=True)
+        growth.index = [YEARLY[m].label for m in growth.index]
+        config = {c: st.column_config.Column(help=f"Average growth per year over the last {c[:-1]} year(s).")
+                  for c in growth.columns}
+        st.dataframe(growth.map(lambda v: "" if pd.isna(v) else f"{v:.1%}"), use_container_width=True,
+                     column_config=config)
+        st.caption("Empty cells: not enough history yet, or a start/end value that is zero or negative.")
 
-st.caption(f"All values in {stock['currency']}. Sources: SEC EDGAR (US), Yahoo Finance, and manual entries "
-           "(manual values always win). TTM = trailing 12 months. Quarters are calendar quarters.")
+    tab_y, tab_q, tab_dcf = st.tabs(["Yearly", "Quarterly", "DCF estimates"])
+    with tab_y:
+        if not a_df.empty:
+            show_table(a_df, YEARLY)
+    with tab_q:
+        if not q_df.empty:
+            show_table(q_df, {**QUARTERLY, "cash": Metric("Cash", "Cash and cash equivalents at quarter end.", "Quarterly")})
+    with tab_dcf:
+        if dcf_df.empty:
+            st.info("No DCF estimates entered yet. Add them in the manual-entry sheet, tab 'dcf'.")
+        else:
+            st.dataframe(dcf_df.sort_index(ascending=False), use_container_width=True)
+
+    st.caption(f"All values in {stock['currency']}. Sources: SEC EDGAR (US), Yahoo Finance, and manual entries "
+               "(manual values always win). TTM = trailing 12 months. Quarters are calendar quarters.")
+
+
+# ---------------------------------------------------------------- screener page
+def screener_page():
+    st.title("Screener")
+    st.write("Find watchlist stocks that meet all your conditions. Percent metrics take percent values "
+             "(type 10 for 10%).")
+    watchlist = load_watchlist()
+    rows = {}
+    for r in watchlist.itertuples():
+        d, q, a, dcf = load_stock(r.ticker)
+        rows[r.ticker] = {"name": r.name, "currency": r.currency, **screener.summary_row(d, q, a, dcf)}
+    table = pd.DataFrame.from_dict(rows, orient="index")
+
+    labels = [m.label for m in screener.COLUMNS.values()]
+    default = pd.DataFrame([{"metric": "ROIC (TTM)", "operator": ">", "value": 10.0}])
+    conditions = st.data_editor(
+        default, num_rows="dynamic", use_container_width=True, key="conditions",
+        column_config={
+            "metric": st.column_config.SelectboxColumn("Metric", options=labels, required=True),
+            "operator": st.column_config.SelectboxColumn("Condition", options=list(screener.OPERATORS), required=True),
+            "value": st.column_config.NumberColumn("Value", help="For percent metrics, 10 means 10%.", required=True),
+        })
+    result = screener.apply_filters(table, conditions)
+    st.caption(f"{len(result)} of {len(table)} stocks meet all conditions.")
+
+    shown = result.copy()
+    config = {"name": st.column_config.Column("Name"), "currency": st.column_config.Column("Currency")}
+    for key, meta in screener.COLUMNS.items():
+        if meta.percent:
+            shown[key] = shown[key] * 100
+        config[key] = st.column_config.NumberColumn(meta.label, help=meta.tooltip,
+                                                    format="%.1f%%" if meta.percent else "%.2f")
+    st.dataframe(shown[["name", "currency", *screener.COLUMNS]], use_container_width=True, column_config=config)
+
+
+st.navigation([
+    st.Page(stock_page, title="Stock", icon=":material/show_chart:", default=True),
+    st.Page(screener_page, title="Screener", icon=":material/filter_alt:", url_path="screener"),
+]).run()
