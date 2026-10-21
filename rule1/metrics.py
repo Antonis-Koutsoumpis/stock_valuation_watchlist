@@ -25,7 +25,7 @@ def pick_values(statements: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     df = statements.assign(rank=statements["source"].map(SOURCE_PRIORITY).fillna(9))
     df = df.sort_values("rank").drop_duplicates(["period", "metric"], keep="first")
-    wide = df.pivot(index="period", columns="metric", values="value")
+    wide = df.pivot(index="period", columns="metric", values="value").apply(pd.to_numeric, errors="coerce")
     return wide.sort_index()
 
 
@@ -36,6 +36,7 @@ def _col(df, name):
 def _derive(w: pd.DataFrame, flows: pd.DataFrame) -> pd.DataFrame:
     """Shared formulas. `flows` holds the 12-month flow values (TTM or fiscal year)."""
     out = pd.DataFrame(index=w.index)
+    w, flows = w.astype(float), flows.astype(float)
     debt = _col(w, "total_debt").fillna(0.0)  # no debt reported -> no debt
     equity = _col(w, "equity")
     shares = _col(w, "shares_outstanding").fillna(_col(w, "diluted_shares"))
@@ -55,7 +56,7 @@ def _derive(w: pd.DataFrame, flows: pd.DataFrame) -> pd.DataFrame:
     out["dividends"] = flows["dividends_paid"]
     out["dividends_per_share"] = flows["dividends_paid"] / shares
     out["payout_ratio"] = flows["dividends_paid"] / flows["net_income"].where(flows["net_income"] > 0)
-    return out
+    return out.replace([np.inf, -np.inf], np.nan)
 
 
 def _add_nopat_fcf(w: pd.DataFrame) -> pd.DataFrame:

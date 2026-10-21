@@ -236,3 +236,16 @@ def test_daily_converts_reporting_currency_and_adr_ratio():
     # TTM EPS 4 -> 2 USD per share -> 10 USD per ADR (5 shares)
     assert d["trailing_pe"].iloc[0] == pytest.approx(10.0)
     assert d["price_book"].iloc[0] == pytest.approx(100 / (30 * 0.5 * 5))
+
+
+def test_sec_q4_eps_from_full_year():
+    eps = [
+        _fact("2023-01-01", "2023-03-31", 1.0, "2023-04-30", fp="Q1"),
+        _fact("2023-04-01", "2023-06-30", 1.1, "2023-07-30", fp="Q2"),
+        _fact("2023-07-01", "2023-09-30", 1.2, "2023-10-30", fp="Q3"),
+        _fact("2023-01-01", "2023-12-31", 4.6, "2024-02-01", fp="FY", form="10-K"),
+    ]
+    data = {"facts": {"us-gaap": {"EarningsPerShareDiluted": {"units": {"USD/shares": eps}}}}}
+    q, _ = fetch_sec.parse_companyfacts(data)
+    vals = q.set_index("period")["value"].to_dict()
+    assert vals["2023Q4"] == pytest.approx(1.3)

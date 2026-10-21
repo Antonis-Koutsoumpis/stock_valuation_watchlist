@@ -40,7 +40,8 @@ INSTANT_CONCEPTS = {
     "debt_long_term_current": ["LongTermDebtCurrent"],
     "debt_short_term": ["ShortTermBorrowings", "CommercialPaper"],
 }
-# Not additive across quarters, so never derived by subtracting year-to-date values.
+# Not additive across quarters, so never derived by subtracting year-to-date values
+# (EPS Q4 is approximated from the full year, see _duration_series).
 NON_ADDITIVE = {"eps_diluted", "diluted_shares"}
 # Restated to today's share count after a stock split (e.g. Amazon's 20-for-1 in 2022).
 PER_SHARE = {"eps_diluted"}
@@ -103,7 +104,7 @@ def _fiscal_labels(df: pd.DataFrame) -> dict:
     return {r.end: f"FY{r.fy} {r.fp}" for r in first.itertuples() if pd.notna(r.fy)}
 
 
-def _duration_series(df: pd.DataFrame, additive: bool) -> tuple[dict, dict]:
+def _duration_series(df: pd.DataFrame, additive: bool, q4_from_year: bool = False) -> tuple[dict, dict]:
     """Returns ({quarter_end: value}, {year_end: value}) from duration facts.
     10-Q cash flows are year-to-date; quarters are derived by differencing."""
     df = df.sort_values("filed").drop_duplicates(["start", "end"], keep="last")
@@ -111,6 +112,12 @@ def _duration_series(df: pd.DataFrame, additive: bool) -> tuple[dict, dict]:
     quarterly = {r.end: r.val for r in df[(days >= 80) & (days <= 100)].itertuples()}
     is_10k = df["form"].str.startswith("10-K") & (df["fp"] == "FY")
     annual = {r.end: r.val for r in df[(days >= 350) & (days <= 380) & is_10k].itertuples()}
+    if q4_from_year:
+        # Q4 is rarely reported on its own: approximate it as the year minus Q1-Q3.
+        for r in df[(days >= 350) & (days <= 380) & is_10k].itertuples():
+            inside = [v for e, v in quarterly.items() if r.start < e < r.end]
+            if r.end not in quarterly and len(inside) == 3:
+                quarterly[r.end] = r.val - sum(inside)
     if additive:
         for _, chain in df.groupby("start"):
             chain = chain.sort_values("end")
@@ -147,7 +154,7 @@ def parse_companyfacts(data: dict, splits: pd.Series | None = None) -> tuple[pd.
                 continue
             df = _split_adjust(df, metric, splits)
             fiscal.update({k: v for k, v in _fiscal_labels(df).items() if k not in fiscal})
-            q, a = _duration_series(df, metric not in NON_ADDITIVE)
+            q, a = _duration_series(df, metric not in NON_ADDITIVE, q4_from_year=metric == "eps_diluted")
             for end, v in q.items():
                 q_vals.setdefault(end, v)
             for end, v in a.items():
