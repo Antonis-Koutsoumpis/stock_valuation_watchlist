@@ -313,7 +313,7 @@ period,period_end,fiscal_label,metric,value,source,fetched_at
 2026,2026-06-30,FY2026.0 FY,revenue,3.31839e+11,sec,2026-10-21
 2026,2026-06-30,,revenue,3.31839e+11,yahoo,2026-10-21
 2026,2026-06-30,FY2026.0 FY,shares_outstanding,7427000000,sec,2026-10-21
-2026,2026-06-30,,shares_outstanding,7428434704,yahoo,2026-10-21
+2026,2026-06-30,,shares_outstanding,7427000000,yahoo,2026-10-21
 2026,2026-06-30,FY2026.0 FY,tax_provision,3.2185e+10,sec,2026-10-21
 2026,2026-06-30,,tax_provision,3.2185e+10,yahoo,2026-10-21
 2026,2026-06-30,FY2026.0 FY,total_debt,4.0294e+10,sec,2026-10-21
