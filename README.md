@@ -1,3 +1,5 @@
+The repository is linked to the Streamlit app [Stock valuation watchlist](https://stock-valuation-watchlist.streamlit.app).
+
 # Stock valuation watchlist
 
 An online tool that values stocks using Phil Town's Rule #1 criteria. It runs for free: this
