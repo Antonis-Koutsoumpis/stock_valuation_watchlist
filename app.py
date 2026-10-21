@@ -18,6 +18,7 @@ DCF_LINE = "rgba(46, 139, 87, 0.9)"
 COMPARE_COLORS = ["#2ca02c", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
 CALC_FILL = "rgba(255, 140, 0, 0.18)"
 CALC_LINE = "rgba(230, 120, 0, 0.95)"
+PERIOD_YEARS = {"1y": 1, "3y": 3, "5y": 5, "10y": 10, "20y": 20, "All": None, "Custom": None}
 QUARTER_BAR_WIDTH = 75 * 24 * 3600 * 1000  # ms
 
 
@@ -154,9 +155,18 @@ def stock_page():
 
     first, last_day = daily_df.index.min().date(), daily_df.index.max().date()
     default_start = max(first, (pd.Timestamp(last_day) - pd.DateOffset(years=5)).date())
-    picked = st.sidebar.date_input("Time range", value=(default_start, last_day), min_value=first, max_value=last_day,
-                                   help="Or drag across the graph to zoom in, and double-click it to zoom back out.")
-    start, end = (pd.Timestamp(picked[0]), pd.Timestamp(picked[1])) if len(picked) == 2 else (pd.Timestamp(first), pd.Timestamp(last_day))
+    period = st.segmented_control(
+        "Time range", list(PERIOD_YEARS), default="5y", key="period",
+        help="The graph, Price CAGR, Total growth, trend and average lines all follow this. "
+             "Custom: pick your own dates.") or "5y"
+    if period == "Custom":
+        picked = st.date_input("From – to", value=(default_start, last_day), min_value=first, max_value=last_day)
+        start, end = ((pd.Timestamp(picked[0]), pd.Timestamp(picked[1])) if len(picked) == 2
+                      else (pd.Timestamp(default_start), pd.Timestamp(last_day)))
+    else:
+        end = pd.Timestamp(last_day)
+        years = PERIOD_YEARS[period]
+        start = max(pd.Timestamp(first), end - pd.DateOffset(years=years)) if years else pd.Timestamp(first)
 
     log_scale = st.sidebar.radio("Scale", ["Raw", "Logarithmic"], horizontal=True) == "Logarithmic"
     needs_quarterly = any(m in QUARTERLY or m in DCF for m in selected)
@@ -221,13 +231,16 @@ def stock_page():
     own = own[(own.index >= start) & (own.index <= end + pd.Timedelta(days=1))]
     total = own.iloc[-1] / own.iloc[0] - 1 if len(own) > 1 else None
     years = (own.index[-1] - own.index[0]).days / 365.25 if len(own) > 1 else 0
-    cagr = (1 + total) ** (1 / years) - 1 if total is not None and years >= 1 and total > -1 else None
-    period = f"{own.index[0]:%b %Y} to {own.index[-1]:%b %Y}" if len(own) > 1 else ""
-    cols[4].metric(f"Price CAGR ({years:.0f}y)" if years >= 1 else "Price CAGR", fmt(cagr, percent=True),
-                   help=f"Average price growth per year over the time range in the sidebar ({period}), "
+    cagr = (1 + total) ** (1 / years) - 1 if total is not None and years >= 0.95 and total > -1 else None
+    span = f"{own.index[0]:%d %b %Y} to {own.index[-1]:%d %b %Y}" if len(own) > 1 else ""
+    label = f" ({years:.0f}y)" if years >= 0.95 else ""
+    cols[4].metric(f"Price CAGR{label}", fmt(cagr, percent=True),
+                   help=f"Average price growth per year over the chosen time range ({span}), "
                         "without dividends. Shown for 1 year or longer.")
-    cols[5].metric(f"Total growth ({years:.0f}y)" if years >= 1 else "Total growth", fmt(total, percent=True),
-                   help=f"Price change over the time range in the sidebar ({period}), without dividends.")
+    total_text = f"×{1 + total:,.0f}" if total is not None and total >= 9 else fmt(total, percent=True)
+    cols[5].metric(f"Total growth{label}", total_text,
+                   help=f"Price change over the chosen time range ({span}), without dividends. "
+                        "Above +900% it shows how many times the price multiplied (×10 = +900%).")
 
     # ---- Graph ----
     def series_for(metric: str) -> pd.Series:
@@ -243,7 +256,7 @@ def stock_page():
             if quarterly_mode:
                 s = s.groupby(s.index.to_period("Q")).mean()
                 s.index = pd.DatetimeIndex([quarter_mid(str(p)) for p in s.index])
-        return s  # the full history, so 10y and All on the graph show older values too
+        return in_range(s)
 
     def in_range(s: pd.Series) -> pd.Series:
         return s[(s.index >= start) & (s.index <= end + pd.Timedelta(days=1))]
@@ -299,9 +312,9 @@ def stock_page():
         fig.update_layout({"yaxis" if i == 0 else f"yaxis{i + 1}": spec})
 
     if show_dcf and not dcf_df.empty and price_axis:
-        add_boxes(fig, dcf_df, price_axis, pd.Timestamp.min, end, "DCF sites", DCF_FILL, DCF_LINE)
+        add_boxes(fig, dcf_df, price_axis, start, end, "DCF sites", DCF_FILL, DCF_LINE)
     if show_calc and not calc_hist.empty and price_axis:
-        add_boxes(fig, calc_hist, price_axis, pd.Timestamp.min, end, "Calculated value", CALC_FILL, CALC_LINE)
+        add_boxes(fig, calc_hist, price_axis, start, end, "Calculated value", CALC_FILL, CALC_LINE)
 
     if overlays and not price_axis:
         st.info("Add Price to the variables to see the index or compared stocks on the graph.")
@@ -321,6 +334,7 @@ def stock_page():
             if quarterly_mode:
                 other = other.groupby(other.index.to_period("Q")).mean()
                 other.index = pd.DatetimeIndex([quarter_mid(str(p)) for p in other.index])
+            other = in_range(other)
             fig.add_trace(go.Scatter(
                 x=other.index, y=other.values * factor, yaxis=price_axis, mode="lines", customdata=other.values,
                 name=f"{names[t]} (scaled to the stock on {first_day:%d %b %Y}; {change:+.0%} in the time range)",
@@ -333,13 +347,7 @@ def stock_page():
         height=580, hovermode="x unified", margin=dict(l=60, r=60, t=40, b=30), bargap=0,
         legend=dict(orientation="h", y=-0.28),
         xaxis=dict(domain=[0.08, 0.92], range=[x_start, end + pd.Timedelta(days=1)],
-                   rangeslider=dict(visible=True, thickness=0.06),
-                   rangeselector=dict(buttons=[
-                       dict(count=1, label="1y", step="year", stepmode="backward"),
-                       dict(count=3, label="3y", step="year", stepmode="backward"),
-                       dict(count=5, label="5y", step="year", stepmode="backward"),
-                       dict(count=10, label="10y", step="year", stepmode="backward"),
-                       dict(step="all", label="All")])))
+))
     st.plotly_chart(fig, use_container_width=True)
 
     if compare:
