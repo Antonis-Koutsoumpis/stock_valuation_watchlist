@@ -209,3 +209,19 @@ def test_sec_rows_are_replaced_by_a_new_full_fetch(tmp_path):
     store.merge_statements(path, pd.DataFrame([row("2026", -1.0, "sec"), row("2020", 5.0, "yahoo")]))
     merged = store.merge_statements(path, pd.DataFrame([row("2025", 2.0, "sec")]), replace_sources={"sec"})
     assert sorted(zip(merged["period"], merged["source"])) == [("2020", "yahoo"), ("2025", "sec")]
+
+
+def test_daily_falls_back_to_yearly_figures():
+    years = pd.DataFrame([{"period": y, "metric": m, "value": v, "source": "yahoo"}
+                          for y, eps in [("2023", 2.0), ("2024", 3.0)]
+                          for m, v in [("eps_diluted", eps), ("equity", 100.0), ("shares_outstanding", 10.0),
+                                       ("revenue", 50.0)]])
+    empty = pd.DataFrame(columns=["period", "metric", "value", "source"])
+    a = metrics.annual(empty, years, empty)
+    dates = pd.to_datetime(["2024-02-01", "2024-04-02", "2025-04-01"])
+    prices = pd.DataFrame({"close": [20.0, 20.0, 30.0]}, index=pd.DatetimeIndex(dates, name="date"))
+    d = metrics.daily(prices, pd.DataFrame(), pd.DataFrame(columns=["ticker", "date", "metric", "value"]), a)
+    # 2023's report counts from the end of March 2024, 2024's from the end of March 2025.
+    assert np.isnan(d["trailing_pe"].iloc[0])
+    assert d["trailing_pe"].iloc[1:].tolist() == [10.0, 10.0]
+    assert d["price_book"].iloc[1:].tolist() == [2.0, 3.0]

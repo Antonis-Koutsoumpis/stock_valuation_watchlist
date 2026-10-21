@@ -14,7 +14,7 @@ def trend(series: pd.Series, kind: str, degree: int = 2) -> tuple[pd.Series, str
     """Fitted values and a legend label.
     Linear: straight line. Polynomial: curve of the given degree.
     Log: straight line on a log scale, i.e. a constant growth rate per year."""
-    s = series.dropna()
+    s = pd.to_numeric(series, errors="coerce").dropna()
     if kind == "Log":
         s = s[s > 0]
     if len(s) < max(3, degree + 1):
@@ -33,7 +33,7 @@ def trend(series: pd.Series, kind: str, degree: int = 2) -> tuple[pd.Series, str
 
 def trailing_average(series: pd.Series, years: int) -> tuple[pd.Timestamp, pd.Timestamp, float] | None:
     """Average over the last `years` years of the series: (start, end, value)."""
-    s = series.dropna()
+    s = pd.to_numeric(series, errors="coerce").dropna()
     if s.empty:
         return None
     end = pd.Timestamp(s.index.max())

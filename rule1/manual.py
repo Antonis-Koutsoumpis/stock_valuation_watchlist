@@ -2,6 +2,7 @@
 always win over fetched ones. The sheet is never written to."""
 
 import os
+import re
 from pathlib import Path
 from urllib.parse import quote
 
@@ -20,6 +21,16 @@ TABS = {
 }
 DCF_SOURCES = TABS["dcf"][2:9]
 DCF_OVERRIDES = ["dcf_low", "dcf_average", "dcf_high"]  # typed-in range; wins over the calculated one
+
+
+def _configured_sheet_id() -> str | None:
+    """The sheet id (or its full link) in config/manual_sheet.txt."""
+    path = ROOT / "config" / "manual_sheet.txt"
+    if not path.exists():
+        return None
+    text = path.read_text().strip()
+    match = re.search(r"/spreadsheets/d/([A-Za-z0-9_-]+)", text)
+    return match.group(1) if match else (text or None)
 
 
 def _sheet_url(sheet_id: str, tab: str) -> str:
@@ -50,7 +61,7 @@ def _clean(df: pd.DataFrame, tab: str) -> pd.DataFrame:
 
 def load(sheet_id: str | None = None) -> dict[str, pd.DataFrame]:
     """Google Sheet if an id is set, else the local Excel file, else the last backup."""
-    sheet_id = sheet_id or os.environ.get("MANUAL_SHEET_ID")
+    sheet_id = sheet_id or os.environ.get("MANUAL_SHEET_ID") or _configured_sheet_id()
     out = {}
     for tab, cols in TABS.items():
         df = None

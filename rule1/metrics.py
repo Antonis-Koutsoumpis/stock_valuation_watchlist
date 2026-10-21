@@ -16,6 +16,7 @@ FLOW_METRICS = ["revenue", "net_income", "eps_diluted", "operating_income", "pre
 RULE1_METRICS = ["roic", "bvps", "revenue", "eps_diluted", "fcf", "net_debt_fcf"]
 DEFAULT_TAX_RATE = 0.25
 REPORTING_LAG = pd.Timedelta(days=45)  # results are public ~6 weeks after quarter end
+ANNUAL_REPORTING_LAG = pd.Timedelta(days=90)  # annual reports come out later
 
 
 def pick_values(statements: pd.DataFrame) -> pd.DataFrame:
@@ -154,33 +155,50 @@ def growth_table(annual_df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).T
 
 
-def daily(prices: pd.DataFrame, quarterly_df: pd.DataFrame, manual_daily: pd.DataFrame) -> pd.DataFrame:
-    """Daily metrics: Yahoo's snapshot where captured, otherwise back-calculated from
-    the close and the latest quarter already published (period end + 45 days)."""
+def _as_of(dates: pd.DataFrame, table: pd.DataFrame) -> pd.DataFrame:
+    """For each date, the values of the latest row already published (`available`)."""
+    table = table.dropna(subset=["available"]).sort_values("available")
+    return pd.merge_asof(dates, table, left_on="date", right_on="available").set_index("date")
+
+
+def daily(prices: pd.DataFrame, quarterly_df: pd.DataFrame, manual_daily: pd.DataFrame,
+          annual_df: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Daily metrics: Yahoo's snapshot where captured, otherwise back-calculated from the
+    close and the latest published figures: the last 4 quarters (period end + 45 days),
+    or, where quarters are missing, the last yearly report (year end + 90 days)."""
     if prices.empty:
         return prices
     d = prices.sort_index().copy()
+    cols = ["eps_diluted_ttm", "revenue_ttm", "bvps", "shares_outstanding",
+            "dividends_per_share_ttm", "payout_ratio_ttm"]
+    dates = d.reset_index()[["date"]]
+    basis = pd.DataFrame(index=d.index, columns=cols, dtype=float)
     if not quarterly_df.empty:
-        q = quarterly_df.assign(available=quarterly_df["period_end"] + REPORTING_LAG).sort_values("available")
-        cols = ["eps_diluted_ttm", "revenue_ttm", "bvps", "shares_outstanding",
-                "dividends_per_share_ttm", "payout_ratio_ttm"]
-        q = q[["available"] + [c for c in cols if c in q]].dropna(subset=["available"])
-        merged = pd.merge_asof(d.reset_index(), q, left_on="date", right_on="available").set_index("date")
-        close = merged["close"]
-        calc = {
-            "trailing_pe": close / merged["eps_diluted_ttm"].where(merged["eps_diluted_ttm"] > 0),
-            "price_sales": close * merged["shares_outstanding"] / merged["revenue_ttm"],
-            "price_book": close / merged["bvps"].where(merged["bvps"] > 0),
-            "trailing_div_yield": merged["dividends_per_share_ttm"] / close,
-            "payout_ratio": merged["payout_ratio_ttm"],
-        }
-        for name, values in calc.items():
-            d[f"{name}_calc"] = values
-        d["market_cap"] = close * merged["shares_outstanding"]
+        q = quarterly_df.assign(available=quarterly_df["period_end"] + REPORTING_LAG)
+        basis = _as_of(dates, q[["available"] + [c for c in cols if c in q]]).reindex(columns=cols)
+    if annual_df is not None and not annual_df.empty:
+        a = annual_df.rename(columns={"eps_diluted": "eps_diluted_ttm", "revenue": "revenue_ttm",
+                                      "dividends_per_share": "dividends_per_share_ttm",
+                                      "payout_ratio": "payout_ratio_ttm"})
+        a = a.assign(available=[pd.Timestamp(f"{y}-12-31") + ANNUAL_REPORTING_LAG for y in a.index])
+        yearly = _as_of(dates, a[["available"] + [c for c in cols if c in a]]).reindex(columns=cols)
+        basis = basis.combine_first(yearly)
+    basis = basis.apply(pd.to_numeric, errors="coerce")
+    close = d["close"]
+    calc = {
+        "trailing_pe": close / basis["eps_diluted_ttm"].where(basis["eps_diluted_ttm"] > 0),
+        "price_sales": close * basis["shares_outstanding"] / basis["revenue_ttm"],
+        "price_book": close / basis["bvps"].where(basis["bvps"] > 0),
+        "trailing_div_yield": basis["dividends_per_share_ttm"] / close,
+        "payout_ratio": basis["payout_ratio_ttm"],
+    }
+    for name, values in calc.items():
+        d[f"{name}_calc"] = values
+    d["market_cap"] = close * basis["shares_outstanding"]
     for name in ["trailing_pe", "forward_pe", "peg_5y", "price_sales", "price_book",
                  "trailing_div_yield", "forward_div_yield", "payout_ratio"]:
-        yahoo, calc = _col(d, f"{name}_yahoo"), _col(d, f"{name}_calc")
-        d[name] = yahoo.combine_first(calc)
+        yahoo, calc_col = _col(d, f"{name}_yahoo"), _col(d, f"{name}_calc")
+        d[name] = yahoo.combine_first(calc_col)
     for r in manual_daily.itertuples():
         d.loc[pd.Timestamp(r.date), r.metric] = r.value
     return d.sort_index()

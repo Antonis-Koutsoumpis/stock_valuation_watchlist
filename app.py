@@ -41,7 +41,7 @@ def load_stock(ticker: str):
     q = metrics.quarterly(sq, man) if not (sq.empty and man.empty) else pd.DataFrame()
     a = metrics.annual(sq, sa, man) if not (sq.empty and sa.empty and man.empty) else pd.DataFrame()
     md = m["daily"][m["daily"]["ticker"] == ticker]
-    d = metrics.daily(prices, q, md)
+    d = metrics.daily(prices, q, md, a)
     return d, q, a, metrics.dcf(m["dcf"], ticker)
 
 
@@ -155,9 +155,12 @@ def stock_page():
     fig = go.Figure()
     axis_slots = [("left", 0.0), ("right", 1.0), ("left", 0.06), ("right", 0.94)]
     price_axis = None
+    first_dates = []
     for i, metric in enumerate(selected):
         meta, color = GRAPH[metric], COLORS[i]
         s = series_for(metric)
+        if not s.empty:
+            first_dates.append(s.index.min())
         axis = "y" if i == 0 else f"y{i + 1}"
         if metric == "close":
             price_axis = axis
@@ -168,7 +171,8 @@ def stock_page():
                 text=[fmt(v) for v in s.values] if bar_values else None, textposition="outside"))
         else:
             fig.add_trace(go.Scatter(x=s.index, y=s.values, name=meta.label, yaxis=axis,
-                                     mode="lines+markers" if quarterly_mode else "lines", line=dict(color=color),
+                                     mode="lines+markers" if quarterly_mode or len(s) < 30 else "lines",
+                                     line=dict(color=color),
                                      text=[fmt(v) for v in s.values] if bar_values and quarterly_mode else None,
                                      textposition="top center"))
             if bar_values and quarterly_mode:
@@ -213,10 +217,12 @@ def stock_page():
                                  line=dict(color=DCF_LINE, width=2), text=mid_text, hovertemplate="%{text}<extra></extra>",
                                  legendgroup="dcf"))
 
+    # The graph starts at the first date with data for the selected variables.
+    x_start = max(start, min(first_dates) - pd.Timedelta(days=45)) if first_dates else start
     fig.update_layout(
         height=580, hovermode="x unified", margin=dict(l=60, r=60, t=40, b=30), bargap=0,
         legend=dict(orientation="h", y=-0.28),
-        xaxis=dict(domain=[0.08, 0.92], range=[start, end + pd.Timedelta(days=1)],
+        xaxis=dict(domain=[0.08, 0.92], range=[x_start, end + pd.Timedelta(days=1)],
                    rangeslider=dict(visible=True, thickness=0.06),
                    rangeselector=dict(buttons=[
                        dict(count=1, label="1y", step="year", stepmode="backward"),
