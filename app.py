@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from rule1 import build, charts, manual, metrics, screener
+from rule1 import build, charts, manual, metrics, screener, valuation
 from rule1.glossary import CAGR_HELP, DAILY, DCF, GRAPH, QUARTERLY, YEARLY, Metric
 from rule1.periods import quarter_end, quarter_start
 from rule1.store import DATA_DIR, read_csv
@@ -15,6 +15,8 @@ st.set_page_config(page_title="Rule #1 Watchlist", layout="wide")
 COLORS = ["#1f77b4", "#d62728", "#9467bd", "#ff7f0e"]
 DCF_FILL = "rgba(46, 139, 87, 0.22)"
 DCF_LINE = "rgba(46, 139, 87, 0.9)"
+CALC_FILL = "rgba(255, 140, 0, 0.18)"
+CALC_LINE = "rgba(230, 120, 0, 0.95)"
 QUARTER_BAR_WIDTH = 75 * 24 * 3600 * 1000  # ms
 
 
@@ -39,6 +41,35 @@ def load_close(ticker: str) -> pd.Series:
 @st.cache_data(ttl=600)
 def load_stock(ticker: str):
     return build.load_stock(load_watchlist().set_index("ticker").loc[ticker], load_manual())
+
+
+@st.cache_data(show_spinner="Calculating the value…")
+def load_valuation(ticker: str, horizon: int, discount: float, growth: float | None):
+    daily_df, q_df, a_df, _ = load_stock(ticker)
+    a = valuation.Assumptions(horizon=horizon, discount=discount, growth=growth)
+    return valuation.value(daily_df, q_df, a_df, a), valuation.history(daily_df, q_df, a_df, a)
+
+
+def add_boxes(fig, ranges: pd.DataFrame, axis: str, start, end, name: str, fill: str, line: str):
+    """One box per quarter from low to high, with the middle as a line."""
+    box_x, box_y, mid_x, mid_y, mid_text = [], [], [], [], []
+    for q, r in ranges.iterrows():
+        q0, q1 = quarter_start(q), quarter_end(q)
+        if q1 < start or q0 > end or pd.isna(r["low"]) or pd.isna(r["high"]):
+            continue
+        box_x += [q0, q1, q1, q0, q0, None]
+        box_y += [r["low"], r["low"], r["high"], r["high"], r["low"], None]
+        if pd.notna(r["middle"]):
+            text = f"{name} {q}: {fmt(r['low'])} to {fmt(r['high'])}, middle {fmt(r['middle'])}"
+            mid_x += [q0, q1, None]
+            mid_y += [r["middle"], r["middle"], None]
+            mid_text += [text, text, None]
+    fig.add_trace(go.Scatter(x=box_x, y=box_y, yaxis=axis, fill="toself", fillcolor=fill,
+                             line=dict(color=line, width=0.5), mode="lines", name=f"{name} (low to high)",
+                             hoverinfo="skip", legendgroup=name))
+    fig.add_trace(go.Scatter(x=mid_x, y=mid_y, yaxis=axis, mode="lines", name=f"{name} middle",
+                             line=dict(color=line, width=2), text=mid_text, hovertemplate="%{text}<extra></extra>",
+                             legendgroup=name))
 
 
 def fmt(value, percent=False):
@@ -119,6 +150,23 @@ def stock_page():
         help="One box per quarter from the DCF low end to the high end, with the middle as a line. "
              "Shown with the Price variable.")
 
+    st.sidebar.markdown("### Calculated value", help=valuation.HELP)
+    horizon = st.sidebar.slider("Growth years", 5, 10, 10,
+                                help="How many years the company keeps growing at the growth rate before it slows "
+                                     "down to 3% a year.")
+    discount = st.sidebar.slider("Discount rate (%)", 6.0, 15.0, 10.0, 0.5,
+                                 help="The yearly return you want. Middle scenario; conservative uses 2% more and "
+                                      "optimistic 2% less. A higher rate gives a lower value.") / 100
+    own_growth = st.sidebar.number_input(
+        "Your growth rate (%)", min_value=0.0, max_value=30.0, value=None, step=1.0, placeholder="From the data",
+        help="Leave empty to use the stock's history and the analysts' estimate. If you type a rate, it is the "
+             "middle scenario (conservative 3% lower, optimistic 3% higher).")
+    calc, calc_hist = load_valuation(ticker, horizon, discount, None if own_growth is None else own_growth / 100)
+    show_calc = st.sidebar.checkbox(
+        "Show calculated value boxes", value=not calc_hist.empty, disabled=calc_hist.empty or "close" not in selected,
+        help="One box per quarter from the conservative to the optimistic value, with the middle as a line, "
+             "calculated with the data published by then. Shown with the Price variable.")
+
     st.sidebar.markdown("### Compare")
     indices = watchlist[watchlist["type"] == "index"]["ticker"].tolist()
     others = [t for t in indices + watchlist[watchlist["type"] != "index"]["ticker"].tolist() if t != ticker]
@@ -131,7 +179,7 @@ def stock_page():
     # ---- Header ----
     last = daily_df.dropna(subset=["close"]).iloc[-1]
     roic = q_df["roic_ttm"].dropna().iloc[-1] if "roic_ttm" in q_df and q_df["roic_ttm"].notna().any() else None
-    cols = st.columns(5)
+    cols = st.columns(6)
     cols[0].metric(f"Price ({stock['currency']})", fmt(last["close"]),
                    help=f"{DAILY['close'].tooltip}\n\nClose on {last.name:%d %b %Y}.")
     cols[1].metric("Trailing P/E", fmt(last.get("trailing_pe")), help=DAILY["trailing_pe"].tooltip)
@@ -141,6 +189,10 @@ def stock_page():
         latest = dcf_df.iloc[-1]
         cols[4].metric(f"DCF middle ({dcf_df.index[-1]})", fmt(latest["middle"]),
                        help=f"{DCF['dcf_middle'].tooltip}\n\nRange {fmt(latest['low'])} to {fmt(latest['high'])}.")
+    rng = calc["range"]
+    cols[5].metric("Calculated value", fmt(rng["middle"]),
+                   help=f"Middle of the three methods (see the 'Calculated value' tab). Range {fmt(rng['low'])} "
+                        f"to {fmt(rng['high'])}; Rule #1 Margin of Safety price {fmt(calc['mos'])}.")
 
     # ---- Graph ----
     def series_for(metric: str) -> pd.Series:
@@ -203,24 +255,9 @@ def stock_page():
         fig.update_layout({"yaxis" if i == 0 else f"yaxis{i + 1}": spec})
 
     if show_dcf and not dcf_df.empty and price_axis:
-        box_x, box_y, mid_x, mid_y, mid_text = [], [], [], [], []
-        for q, r in dcf_df.iterrows():
-            q0, q1 = quarter_start(q), quarter_end(q)
-            if q1 < start or q0 > end or pd.isna(r["low"]) or pd.isna(r["high"]):
-                continue
-            box_x += [q0, q1, q1, q0, q0, None]
-            box_y += [r["low"], r["low"], r["high"], r["high"], r["low"], None]
-            if pd.notna(r["middle"]):
-                text = f"DCF {q}: {fmt(r['low'])} to {fmt(r['high'])}, middle {fmt(r['middle'])}"
-                mid_x += [q0, q1, None]
-                mid_y += [r["middle"], r["middle"], None]
-                mid_text += [text, text, None]
-        fig.add_trace(go.Scatter(x=box_x, y=box_y, yaxis=price_axis, fill="toself", fillcolor=DCF_FILL,
-                                 line=dict(color=DCF_LINE, width=0.5), mode="lines", name="DCF range (low to high)",
-                                 hoverinfo="skip", legendgroup="dcf"))
-        fig.add_trace(go.Scatter(x=mid_x, y=mid_y, yaxis=price_axis, mode="lines", name="DCF middle",
-                                 line=dict(color=DCF_LINE, width=2), text=mid_text, hovertemplate="%{text}<extra></extra>",
-                                 legendgroup="dcf"))
+        add_boxes(fig, dcf_df, price_axis, start, end, "DCF sites", DCF_FILL, DCF_LINE)
+    if show_calc and not calc_hist.empty and price_axis:
+        add_boxes(fig, calc_hist, price_axis, start, end, "Calculated value", CALC_FILL, CALC_LINE)
 
     # The graph starts at the first date with data for the selected variables.
     x_start = max(start, min(first_dates) - pd.Timedelta(days=45)) if first_dates else start
@@ -258,13 +295,15 @@ def stock_page():
                      column_config=config)
         st.caption("Empty cells: not enough history yet, or a start/end value that is zero or negative.")
 
-    tab_y, tab_q, tab_dcf = st.tabs(["Yearly", "Quarterly", "DCF estimates"])
+    tab_y, tab_q, tab_calc, tab_dcf = st.tabs(["Yearly", "Quarterly", "Calculated value", "DCF estimates"])
     with tab_y:
         if not a_df.empty:
             show_table(a_df, YEARLY)
     with tab_q:
         if not q_df.empty:
             show_table(q_df, {**QUARTERLY, "cash": Metric("Cash", "Cash and cash equivalents at quarter end.", "Quarterly")})
+    with tab_calc:
+        calculated_value_tab(calc, stock["currency"], horizon, discount)
     with tab_dcf:
         if dcf_df.empty:
             st.info("No DCF estimates entered yet. Add them in the manual-entry sheet, tab 'dcf'.")
@@ -277,6 +316,43 @@ def stock_page():
                      if fin != stock["currency"] else f"All values in {stock['currency']}.")
     st.caption(f"{currency_note} Sources: SEC EDGAR (US), Yahoo Finance, and manual entries "
                "(manual values always win). TTM = trailing 12 months. Quarters are calendar quarters.")
+
+
+def calculated_value_tab(calc: dict, currency: str, horizon: int, discount: float):
+    st.markdown(valuation.HELP)
+    if not calc["growth"]:
+        st.info("No value: the stock has no positive growth history or analyst estimate yet.")
+        return
+    inp = calc["inputs"]
+    table = calc["table"].copy()
+    table.loc["Middle of the three"] = table.median()
+    table["Price / middle"] = inp["price"] / table["Middle"]
+    st.dataframe(table.map(lambda v: fmt(v)), use_container_width=True, column_config={
+        "Conservative": st.column_config.Column(help="Lowest growth rates, discount rate + 2%, final growth 2%."),
+        "Middle": st.column_config.Column(help="Middle growth rate, your discount rate, final growth 3%."),
+        "Optimistic": st.column_config.Column(help="Highest growth rates, discount rate − 2%, final growth 3%."),
+        "Price / middle": st.column_config.Column(help="Below 1: the price is below the calculated value."),
+    })
+    st.caption(f"Values per share in {currency}. Rule #1 Margin of Safety price (half the middle Sticker Price): "
+               f"{fmt(calc['mos'])}. Empty cells: the starting value (EPS or FCF) is zero or negative.")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Growth rate used**", help="Conservative = 25th percentile of the rates on the right, "
+                    "middle = median, optimistic = 75th percentile; between 0% and 20% a year.")
+        st.dataframe(pd.Series({s: fmt(g, percent=True) for s, g in calc["growth"].items()}, name="per year"),
+                     use_container_width=True)
+        st.markdown("**Starting values**")
+        st.dataframe(pd.Series({
+            "Price": fmt(inp["price"]), "EPS (last 12 months)": fmt(inp["eps"]),
+            "FCF per share (last 12 months)": fmt(inp["fcf_per_share"]),
+            "Average P/E (10 years)": fmt(inp["avg_pe"]),
+            "Growth years": str(horizon), "Discount rate": fmt(discount, percent=True)}, name="value"),
+            use_container_width=True)
+    with c2:
+        st.markdown("**Growth rates found**", help="Yearly growth (CAGR) over 5 and 10 years from the statements, "
+                    "and the analysts' 5-year estimate (Yahoo's P/E ÷ PEG).")
+        st.dataframe(pd.Series({k: fmt(v, percent=True) for k, v in calc["candidates"].items()}, name="per year"),
+                     use_container_width=True)
 
 
 def perf_chart(ticker, compare, names, start, end):
@@ -351,7 +427,9 @@ def screener_page():
     st.caption(f"{len(result)} of {len(table)} stocks meet all conditions. Stocks without enough history "
                "for a condition don't pass it (most non-US stocks have 4 years until older data is added).")
 
-    columns = {"close": ("Price", screener.FILTERS["Price"]), "trailing_pe": ("Trailing P/E", screener.FILTERS["Trailing P/E"])}
+    columns = {"close": ("Price", screener.FILTERS["Price"]), "trailing_pe": ("Trailing P/E", screener.FILTERS["Trailing P/E"]),
+               "calc_middle": ("Calculated value", screener.Filter(valuation.HELP, {})),
+               "price_to_calc": ("Price / calculated value", screener.FILTERS["Price / calculated value"])}
     for r in resolved:
         if r:
             columns[r[0]] = (r[1], r[2])

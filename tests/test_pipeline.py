@@ -261,3 +261,42 @@ def test_sec_q4_eps_from_full_year():
     q, _ = fetch_sec.parse_companyfacts(data)
     vals = q.set_index("period")["value"].to_dict()
     assert vals["2023Q4"] == pytest.approx(1.3)
+
+
+def test_dcf_per_share_matches_hand_calculation():
+    from rule1 import valuation
+    # 2 years at 10% growth, 10% discount: each year is worth 1.0 today; terminal 3%
+    v = valuation.dcf_per_share(1.0, 0.10, 0.10, 0.03, 2)
+    terminal = 1.21 * 1.03 / 0.07 / 1.21
+    assert abs(v - (2 + terminal)) < 1e-9
+    assert np.isnan(valuation.dcf_per_share(-1.0, 0.1, 0.1, 0.03, 5))
+
+
+def test_sticker_price_uses_lower_pe_and_half_for_mos():
+    from rule1 import valuation
+    a = valuation.Assumptions(horizon=10)
+    sticker, mos = valuation.sticker_price(2.0, 0.10, 15.0, a)  # future P/E = min(20, 15)
+    assert abs(sticker - 2.0 * 1.1 ** 10 * 15 / 1.15 ** 10) < 1e-9
+    assert mos == sticker / 2
+
+
+def test_valuation_scenarios_and_history():
+    from rule1 import valuation
+    days = pd.bdate_range("2015-01-01", "2020-12-31")
+    daily = pd.DataFrame({"close": 100.0, "trailing_pe": 20.0, "trailing_pe_yahoo": 20.0, "peg_5y_yahoo": 2.0},
+                         index=days)
+    years = [str(y) for y in range(2010, 2020)]
+    annual = pd.DataFrame({"eps_diluted_cagr_5y": 0.08, "fcf_cagr_5y": 0.12, "net_income": 1.0, "fcf": 1.0},
+                          index=pd.Index(years, name="period"))
+    quarterly = pd.DataFrame({"period_end": pd.to_datetime(["2019-12-31"]), "fcf_ttm": [2.0], "net_income_ttm": [4.0]},
+                             index=["2019Q4"])
+    v = valuation.value(daily, quarterly, annual)
+    assert v["candidates"] == {"EPS 5y": 0.08, "FCF 5y": 0.12, "Analysts 5y": 0.10}
+    assert v["growth"]["Conservative"] < v["growth"]["Middle"] < v["growth"]["Optimistic"]
+    assert v["inputs"]["eps"] == 5.0 and v["inputs"]["fcf_per_share"] == 2.5
+    assert v["range"]["low"] < v["range"]["middle"] < v["range"]["high"]
+    own = valuation.value(daily, quarterly, annual, valuation.Assumptions(growth=0.05))
+    assert own["growth"]["Middle"] == 0.05
+    h = valuation.history(daily, quarterly, annual)
+    assert h.index[0] == "2015Q1" and h.index[-1] == "2020Q4"
+    assert h["middle"].notna().all()

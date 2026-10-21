@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from . import valuation
 from .glossary import CAGR_HELP, DAILY, QUARTERLY
 
 SUMMARY_PATH = Path(__file__).resolve().parent.parent / "data" / "_summary" / "screener.csv"
@@ -40,8 +41,14 @@ FILTERS = {
     "Net Debt / FCF": Filter(QUARTERLY["net_debt_fcf_ttm"].help, {"Latest": "net_debt_fcf_ttm"}),
     "BVPS": Filter(QUARTERLY["bvps"].help, {"Latest": "bvps"}),
     "Price": Filter(DAILY["close"].help, {"Latest": "close"}),
-    "Price / DCF middle": Filter("Price ÷ DCF middle. Below 1 = the share trades below its estimated value.",
+    "Price / DCF middle": Filter("Price ÷ DCF middle from the sites you entered. "
+                                 "Below 1 = the share trades below its estimated value.",
                                  {"Latest": "price_to_dcf"}),
+    "Price / calculated value": Filter("Price ÷ the middle calculated value (default assumptions: 10 growth years, "
+                                       "10% discount rate). Below 1 = the share trades below it.",
+                                       {"Latest": "price_to_calc"}),
+    "Price / Margin of Safety": Filter("Price ÷ the Rule #1 Margin of Safety price. At or below 1 = Phil Town's "
+                                       "buy zone.", {"Latest": "price_to_mos"}),
 }
 PERIODS = ["Latest", *[f"{n}y" for n in YEARS]]
 
@@ -71,6 +78,11 @@ def summary_row(daily: pd.DataFrame, quarterly: pd.DataFrame, annual: pd.DataFra
             row[f"{key}_cagr_{n}y"] = _last(annual, f"{key}_cagr_{n}y")
     row["dcf_middle"] = _last(dcf, "middle")
     row["price_to_dcf"] = row["close"] / row["dcf_middle"] if row["dcf_middle"] else np.nan
+    calc = valuation.value(daily, quarterly, annual)
+    row.update(calc_low=calc["range"]["low"], calc_middle=calc["range"]["middle"], calc_high=calc["range"]["high"],
+               calc_mos=calc["mos"])
+    row["price_to_calc"] = row["close"] / row["calc_middle"] if row["calc_middle"] > 0 else np.nan
+    row["price_to_mos"] = row["close"] / row["calc_mos"] if row["calc_mos"] > 0 else np.nan
     return row
 
 

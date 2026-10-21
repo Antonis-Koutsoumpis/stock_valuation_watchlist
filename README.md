@@ -15,7 +15,9 @@ shows it.
 - **Sources**: SEC EDGAR for US companies (10+ years of quarterly statements), Yahoo Finance for
   all stocks, and manual entries from the Google Sheet. Manual values always win.
 - **App** (`app.py`): search the watchlist, plot any metrics (raw or log scale, daily or
-  averaged per quarter), see Rule #1 growth (CAGR over 1 to 10 years) and the DCF range.
+  averaged per quarter), see Rule #1 growth (CAGR over 1 to 10 years), the DCF range from the
+  sites you entered, and a calculated value (FCF DCF, EPS DCF and Rule #1 Sticker Price, each
+  conservative/middle/optimistic; `rule1/valuation.py`).
 
 ## Files
 
