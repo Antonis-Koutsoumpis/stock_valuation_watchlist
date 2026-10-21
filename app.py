@@ -15,6 +15,7 @@ st.set_page_config(page_title="Rule #1 Watchlist", layout="wide")
 COLORS = ["#1f77b4", "#d62728", "#9467bd", "#ff7f0e"]
 DCF_FILL = "rgba(46, 139, 87, 0.22)"
 DCF_LINE = "rgba(46, 139, 87, 0.9)"
+COMPARE_COLORS = ["#2ca02c", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
 CALC_FILL = "rgba(255, 140, 0, 0.18)"
 CALC_LINE = "rgba(230, 120, 0, 0.95)"
 QUARTER_BAR_WIDTH = 75 * 24 * 3600 * 1000  # ms
@@ -89,6 +90,27 @@ def quarter_mid(label: str) -> pd.Timestamp:
     return start + (quarter_end(label) - start) / 2
 
 
+GREEN = "background-color: rgba(76, 175, 80, 0.25)"
+ROW_LABELS = {"roic": "ROIC (average)", "net_debt_fcf": "Net Debt / FCF (average)", "bvps": "BVPS growth",
+              "revenue": "Revenue growth", "eps_diluted": "EPS growth", "fcf": "Free Cash Flow growth"}
+
+
+def rule1_ok(metric: str, v) -> bool:
+    if pd.isna(v):
+        return False
+    return v <= 3 if metric == "net_debt_fcf" else v >= 0.10
+
+
+def rule1_styler(growth: pd.DataFrame):
+    """Rule #1 table with cells that meet the rule in green."""
+    green = pd.DataFrame([[GREEN if rule1_ok(m, v) else "" for v in row] for m, row in growth.iterrows()],
+                         index=growth.index, columns=growth.columns)
+    text = pd.DataFrame([[fmt(v, percent=m != "net_debt_fcf") for v in row] for m, row in growth.iterrows()],
+                        index=growth.index, columns=growth.columns)
+    text.index = green.index = [ROW_LABELS.get(m, m) for m in growth.index]
+    return text.style.apply(lambda _: green, axis=None)
+
+
 def show_table(df: pd.DataFrame, glossary: dict):
     """Formatted table; hovering a column header shows what the metric means."""
     cols = [c for c in glossary if c in df]
@@ -118,13 +140,14 @@ def stock_page():
     available = [m for m in GRAPH
                  if (m in daily_df and daily_df[m].notna().any())
                  or (m in q_df and q_df[m].notna().any())
-                 or (m in DCF and not dcf_df.empty)]
+                 or (m in DCF and "close" in daily_df)]
     selected = st.sidebar.multiselect(
         "Variables", available, default=["close"], format_func=lambda m: GRAPH[m].label, max_selections=4,
         help="Up to 4, each with its own axis. Hover the ? next to each name under the graph to see what it means.")
 
     first, last_day = daily_df.index.min().date(), daily_df.index.max().date()
-    picked = st.sidebar.date_input("Time range", value=(first, last_day), min_value=first, max_value=last_day,
+    default_start = max(first, (pd.Timestamp(last_day) - pd.DateOffset(years=5)).date())
+    picked = st.sidebar.date_input("Time range", value=(default_start, last_day), min_value=first, max_value=last_day,
                                    help="Or drag across the graph to zoom in, and double-click it to zoom back out.")
     start, end = (pd.Timestamp(picked[0]), pd.Timestamp(picked[1])) if len(picked) == 2 else (pd.Timestamp(first), pd.Timestamp(last_day))
 
@@ -146,35 +169,37 @@ def stock_page():
         "Average lines", [5, 10], format_func=lambda y: f"{y}-year average",
         help="Dotted line at the average of each variable over the last 5 or 10 years of the time range.")
     show_dcf = st.sidebar.checkbox(
-        "Show DCF range boxes", value=not dcf_df.empty, disabled=dcf_df.empty or "close" not in selected,
+        "Show DCF range boxes (from the sites)", value=False, disabled=dcf_df.empty or "close" not in selected,
         help="One box per quarter from the DCF low end to the high end, with the middle as a line. "
              "Shown with the Price variable.")
-
-    st.sidebar.markdown("### Calculated value", help=valuation.HELP)
-    horizon = st.sidebar.slider("Growth years", 5, 10, 10,
-                                help="How many years the company keeps growing at the growth rate before it slows "
-                                     "down to 3% a year.")
-    discount = st.sidebar.slider("Discount rate (%)", 6.0, 15.0, 10.0, 0.5,
-                                 help="The yearly return you want. Middle scenario; conservative uses 2% more and "
-                                      "optimistic 2% less. A higher rate gives a lower value.") / 100
-    own_growth = st.sidebar.number_input(
-        "Your growth rate (%)", min_value=0.0, max_value=30.0, value=None, step=1.0, placeholder="From the data",
-        help="Leave empty to use the stock's history and the analysts' estimate. If you type a rate, it is the "
-             "middle scenario (conservative 3% lower, optimistic 3% higher).")
-    calc, calc_hist = load_valuation(ticker, horizon, discount, None if own_growth is None else own_growth / 100)
-    show_calc = st.sidebar.checkbox(
-        "Show calculated value boxes", value=not calc_hist.empty, disabled=calc_hist.empty or "close" not in selected,
-        help="One box per quarter from the conservative to the optimistic value, with the middle as a line, "
-             "calculated with the data published by then. Shown with the Price variable.")
 
     st.sidebar.markdown("### Compare")
     indices = watchlist[watchlist["type"] == "index"]["ticker"].tolist()
     others = [t for t in indices + watchlist[watchlist["type"] != "index"]["ticker"].tolist() if t != ticker]
     names = watchlist.set_index("ticker")["name"]
     compare = st.sidebar.multiselect(
-        "Compare performance with", others, format_func=lambda t: f"{t} · {names[t]}",
-        help="Shows how much the price rose or fell (in %) since the start of the time range, "
-             "for this stock and the ones you pick, e.g. the S&P 500 and Nasdaq 100.")
+        "Compare with (stocks or indices)", others, format_func=lambda t: f"{t} · {names[t]}",
+        help="Adds the stocks or indices you pick (e.g. the S&P 500 and Nasdaq 100) to the price graph as dashed "
+             "lines, scaled to start at this stock's price, so you see which grew more. A second graph below "
+             "shows the change in %.")
+
+    st.sidebar.markdown("### Calculated value", help=valuation.HELP)
+    horizon = st.sidebar.slider("Growth years (before the terminal value)", 5, 10, 10,
+                                help="How many years the company keeps growing at the growth rate. After that it "
+                                     "grows 3% a year forever: that later part is the terminal value.")
+    discount = st.sidebar.slider("Discount rate (%)", 6.0, 15.0, 10.0, 0.5,
+                                 help="The yearly return you want. Middle scenario; conservative uses 2% more and "
+                                      "optimistic 2% less. A higher rate gives a lower value.") / 100
+    own_growth = st.sidebar.number_input(
+        "Your growth rate (%)", min_value=0.0, max_value=30.0, value=None, step=1.0, placeholder="From the data",
+        help="Empty: the median of the stock's 5- and 10-year growth (EPS, FCF, book value, revenue) and the "
+             "analysts' 5-year estimate, between 0% and 20% (see the 'Calculated value' tab). If you type a rate, "
+             "it is the middle scenario (conservative 3% lower, optimistic 3% higher).")
+    calc, calc_hist = load_valuation(ticker, horizon, discount, None if own_growth is None else own_growth / 100)
+    show_calc = st.sidebar.checkbox(
+        "Show calculated value boxes", value=False, disabled=calc_hist.empty or "close" not in selected,
+        help="One box per quarter from the conservative to the optimistic value, with the middle as a line, "
+             "calculated with the data published by then. Shown with the Price variable.")
 
     # ---- Header ----
     last = daily_df.dropna(subset=["close"]).iloc[-1]
@@ -189,15 +214,19 @@ def stock_page():
         latest = dcf_df.iloc[-1]
         cols[4].metric(f"DCF middle ({dcf_df.index[-1]})", fmt(latest["middle"]),
                        help=f"{DCF['dcf_middle'].tooltip}\n\nRange {fmt(latest['low'])} to {fmt(latest['high'])}.")
+    else:
+        cols[4].metric("Margin of Safety price", fmt(calc["mos"]),
+                       help="Rule #1: half the Sticker Price (middle scenario). Phil Town buys at or below it.")
     rng = calc["range"]
     cols[5].metric("Calculated value", fmt(rng["middle"]),
-                   help=f"Middle of the three methods (see the 'Calculated value' tab). Range {fmt(rng['low'])} "
+                   help=f"Median of all methods, middle scenario (see the 'Calculated value' tab). Range {fmt(rng['low'])} "
                         f"to {fmt(rng['high'])}; Rule #1 Margin of Safety price {fmt(calc['mos'])}.")
 
     # ---- Graph ----
     def series_for(metric: str) -> pd.Series:
         if metric in DCF:
-            s = dcf_df[metric.removeprefix("dcf_")].dropna()
+            src = dcf_df if not dcf_df.empty else calc_hist  # calculated estimates until some are typed in
+            s = src[metric.removeprefix("dcf_")].dropna()
             s.index = pd.DatetimeIndex([quarter_mid(p) for p in s.index])
         elif metric in QUARTERLY:
             s = q_df[metric].dropna()
@@ -259,6 +288,27 @@ def stock_page():
     if show_calc and not calc_hist.empty and price_axis:
         add_boxes(fig, calc_hist, price_axis, start, end, "Calculated value", CALC_FILL, CALC_LINE)
 
+    if compare and price_axis:
+        # Compared stocks and indices on the price axis, scaled to start at this stock's price.
+        own = daily_df["close"].dropna()
+        own = own[(own.index >= start) & (own.index <= end + pd.Timedelta(days=1))]
+        for j, t in enumerate(compare):
+            other = load_close(t)
+            other = other[(other.index >= start) & (other.index <= end + pd.Timedelta(days=1))]
+            common = own.index.intersection(other.index)
+            if common.empty:
+                continue
+            first_day = common.min()
+            scaled = other[other.index >= first_day] * own[first_day] / other[first_day]
+            change = scaled.iloc[-1] / scaled.iloc[0] - 1
+            if quarterly_mode:
+                scaled = scaled.groupby(scaled.index.to_period("Q")).mean()
+                scaled.index = pd.DatetimeIndex([quarter_mid(str(p)) for p in scaled.index])
+            fig.add_trace(go.Scatter(
+                x=scaled.index, y=scaled.values, yaxis=price_axis, mode="lines",
+                name=f"{t} · {names[t]} (scaled, {change:+.0%})",
+                line=dict(color=COMPARE_COLORS[j % len(COMPARE_COLORS)], width=1.5, dash="dash")))
+
     # The graph starts at the first date with data for the selected variables.
     x_start = max(start, min(first_dates) - pd.Timedelta(days=45)) if first_dates else start
     fig.update_layout(
@@ -283,17 +333,17 @@ def stock_page():
             col.markdown(f"**{GRAPH[metric].label}**", help=GRAPH[metric].tooltip)
 
     # ---- Rule #1 tables ----
-    st.subheader("Rule #1 growth (CAGR, latest year)", help=CAGR_HELP)
+    st.subheader("Rule #1 numbers (latest year)", help=CAGR_HELP)
     growth = metrics.growth_table(a_df)
     if growth.empty:
         st.info("Not enough yearly data yet.")
     else:
-        growth.index = [YEARLY[m].label for m in growth.index]
-        config = {c: st.column_config.Column(help=f"Average growth per year over the last {c[:-1]} year(s).")
-                  for c in growth.columns}
-        st.dataframe(growth.map(lambda v: "" if pd.isna(v) else f"{v:.1%}"), use_container_width=True,
-                     column_config=config)
-        st.caption("Empty cells: not enough history yet, or a start/end value that is zero or negative.")
+        st.dataframe(rule1_styler(growth), use_container_width=True, column_config={
+            c: st.column_config.Column(help=f"Over the last {c[:-1]} year(s).") for c in growth.columns})
+        st.caption("Green = meets Rule #1: ROIC and growth 10% or more a year; debt payable from 3 years of free "
+                   "cash flow or less (Net Debt / FCF ≤ 3, negative = more cash than debt). ROIC and Net Debt / FCF "
+                   "are averages over the period; the others are growth per year (CAGR). Empty cells: not enough "
+                   "history yet, or a start/end value that is zero or negative.")
 
     tab_y, tab_q, tab_calc, tab_dcf = st.tabs(["Yearly", "Quarterly", "Calculated value", "DCF estimates"])
     with tab_y:
@@ -306,7 +356,17 @@ def stock_page():
         calculated_value_tab(calc, stock["currency"], horizon, discount)
     with tab_dcf:
         if dcf_df.empty:
-            st.info("No DCF estimates entered yet. Add them in the manual-entry sheet, tab 'dcf'.")
+            st.info("No DCF estimates typed in yet, so this shows the calculated estimates of every method "
+                    "(middle scenario) at the end of each quarter, with the data published by then. "
+                    "Typed-in estimates (manual-entry sheet, tab 'dcf') will replace them.")
+            hist = calc_hist.sort_index(ascending=False)
+            hist = hist[["low", "middle", "high", "mos", *[m for m in valuation.METHODS if m in hist]]]
+            st.dataframe(hist.map(fmt), use_container_width=True, column_config={
+                "low": st.column_config.Column("Low (conservative)", help="Median of all methods, conservative scenario."),
+                "middle": st.column_config.Column("Middle", help="Median of all methods, middle scenario."),
+                "high": st.column_config.Column("High (optimistic)", help="Median of all methods, optimistic scenario."),
+                "mos": st.column_config.Column("Margin of Safety", help="Half the Rule #1 Sticker Price."),
+                **{m: st.column_config.Column(m, help=h) for m, h in valuation.METHOD_HELP.items()}})
         else:
             st.dataframe(dcf_df.sort_index(ascending=False), use_container_width=True)
 
@@ -320,12 +380,14 @@ def stock_page():
 
 def calculated_value_tab(calc: dict, currency: str, horizon: int, discount: float):
     st.markdown(valuation.HELP)
+    with st.expander("How each method works"):
+        st.markdown("\n".join(f"- **{m}**: {h}" for m, h in valuation.METHOD_HELP.items()))
     if not calc["growth"]:
         st.info("No value: the stock has no positive growth history or analyst estimate yet.")
         return
     inp = calc["inputs"]
     table = calc["table"].copy()
-    table.loc["Middle of the three"] = table.median()
+    table.loc["Median of all methods"] = table.median()
     table["Price / middle"] = inp["price"] / table["Middle"]
     st.dataframe(table.map(lambda v: fmt(v)), use_container_width=True, column_config={
         "Conservative": st.column_config.Column(help="Lowest growth rates, discount rate + 2%, final growth 2%."),

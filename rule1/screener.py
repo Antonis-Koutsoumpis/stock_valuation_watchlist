@@ -41,7 +41,8 @@ FILTERS = {
     "Net Debt / FCF": Filter(QUARTERLY["net_debt_fcf_ttm"].help, {"Latest": "net_debt_fcf_ttm"}),
     "BVPS": Filter(QUARTERLY["bvps"].help, {"Latest": "bvps"}),
     "Price": Filter(DAILY["close"].help, {"Latest": "close"}),
-    "Price / DCF middle": Filter("Price ÷ DCF middle from the sites you entered. "
+    "Price / DCF middle": Filter("Price ÷ DCF middle from the sites you entered (the calculated value until "
+                                 "you enter some). "
                                  "Below 1 = the share trades below its estimated value.",
                                  {"Latest": "price_to_dcf"}),
     "Price / calculated value": Filter("Price ÷ the middle calculated value (default assumptions: 10 growth years, "
@@ -77,10 +78,12 @@ def summary_row(daily: pd.DataFrame, quarterly: pd.DataFrame, annual: pd.DataFra
         for key in GROWTH:
             row[f"{key}_cagr_{n}y"] = _last(annual, f"{key}_cagr_{n}y")
     row["dcf_middle"] = _last(dcf, "middle")
-    row["price_to_dcf"] = row["close"] / row["dcf_middle"] if row["dcf_middle"] else np.nan
     calc = valuation.value(daily, quarterly, annual)
     row.update(calc_low=calc["range"]["low"], calc_middle=calc["range"]["middle"], calc_high=calc["range"]["high"],
                calc_mos=calc["mos"])
+    if pd.isna(row["dcf_middle"]):  # calculated estimates until some are typed in
+        row["dcf_middle"] = row["calc_middle"]
+    row["price_to_dcf"] = row["close"] / row["dcf_middle"] if row["dcf_middle"] > 0 else np.nan
     row["price_to_calc"] = row["close"] / row["calc_middle"] if row["calc_middle"] > 0 else np.nan
     row["price_to_mos"] = row["close"] / row["calc_mos"] if row["calc_mos"] > 0 else np.nan
     return row

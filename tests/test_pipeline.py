@@ -300,3 +300,11 @@ def test_valuation_scenarios_and_history():
     h = valuation.history(daily, quarterly, annual)
     assert h.index[0] == "2015Q1" and h.index[-1] == "2020Q4"
     assert h["middle"].notna().all()
+
+
+def test_more_methods():
+    from rule1 import valuation
+    assert valuation.graham_formula(2.0, 0.10, 0.044) == pytest.approx(2.0 * 28.5)
+    assert valuation.lynch(2.0, 0.40) == 50.0  # growth capped at 25
+    assert valuation.graham_number(2.0, 10.0) == pytest.approx(np.sqrt(450))
+    assert valuation.exit_multiple(1.0, 0.0, 0.0, 10, 2) == pytest.approx(12.0)

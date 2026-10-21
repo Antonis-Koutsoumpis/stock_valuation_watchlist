@@ -14,6 +14,7 @@ SOURCE_PRIORITY = {"manual": 0, "sec": 1, "yahoo": 2}
 FLOW_METRICS = ["revenue", "net_income", "eps_diluted", "operating_income", "pretax_income",
                 "tax_provision", "operating_cash_flow", "capex", "dividends_paid", "nopat", "fcf"]
 RULE1_METRICS = ["roic", "bvps", "revenue", "eps_diluted", "fcf", "net_debt_fcf"]
+AVERAGED = {"roic", "net_debt_fcf"}  # shown as averages in the growth table, not as growth
 DEFAULT_TAX_RATE = 0.25
 REPORTING_LAG = pd.Timedelta(days=45)  # results are public ~6 weeks after quarter end
 ANNUAL_REPORTING_LAG = pd.Timedelta(days=90)  # annual reports come out later
@@ -146,14 +147,20 @@ def cagr(series: pd.Series, years: int) -> pd.Series:
 
 
 def growth_table(annual_df: pd.DataFrame) -> pd.DataFrame:
-    """Latest year's CAGR per Rule #1 metric, 1 to 10 years."""
+    """Rule #1 table for the latest year, 1 to 10 years: yearly growth (CAGR) of BVPS, revenue,
+    EPS and FCF, and the average ROIC and Net Debt / FCF over the last N years."""
     if annual_df.empty:
         return pd.DataFrame()
+    cols = [f"{n}y" for n in range(1, 11)]
     rows = {}
     for m in RULE1_METRICS:
-        rows[m] = {f"{n}y": annual_df[f"{m}_cagr_{n}y"].dropna().iloc[-1]
-                   if annual_df[f"{m}_cagr_{n}y"].notna().any() else np.nan for n in range(1, 11)}
-    return pd.DataFrame(rows).T
+        if m in AVERAGED:
+            s = annual_df[m].dropna() if m in annual_df else pd.Series(dtype=float)
+            rows[m] = {f"{n}y": s.iloc[-n:].mean() if len(s) >= n else np.nan for n in range(1, 11)}
+        else:
+            rows[m] = {f"{n}y": annual_df[f"{m}_cagr_{n}y"].dropna().iloc[-1]
+                       if annual_df[f"{m}_cagr_{n}y"].notna().any() else np.nan for n in range(1, 11)}
+    return pd.DataFrame(rows).T[cols]
 
 
 def _as_of(dates: pd.DataFrame, table: pd.DataFrame) -> pd.DataFrame:
