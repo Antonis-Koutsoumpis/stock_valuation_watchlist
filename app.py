@@ -217,17 +217,17 @@ def stock_page():
     cols[1].metric("Trailing P/E", fmt(last.get("trailing_pe")), help=DAILY["trailing_pe"].tooltip)
     cols[2].metric("Forward P/E", fmt(last.get("forward_pe")), help=DAILY["forward_pe"].tooltip)
     cols[3].metric("ROIC (TTM)", fmt(roic, percent=True), help=QUARTERLY["roic_ttm"].tooltip)
-    if not dcf_df.empty:
-        latest = dcf_df.iloc[-1]
-        cols[4].metric(f"DCF middle ({dcf_df.index[-1]})", fmt(latest["middle"]),
-                       help=f"{DCF['dcf_middle'].tooltip}\n\nRange {fmt(latest['low'])} to {fmt(latest['high'])}.")
-    else:
-        cols[4].metric("Margin of Safety price", fmt(calc["mos"]),
-                       help="Rule #1: half the Sticker Price (middle scenario). Phil Town buys at or below it.")
-    rng = calc["range"]
-    cols[5].metric("Calculated value", fmt(rng["middle"]),
-                   help=f"Median of all methods, middle scenario (see the 'Calculated value' tab). Range {fmt(rng['low'])} "
-                        f"to {fmt(rng['high'])}; Rule #1 Margin of Safety price {fmt(calc['mos'])}.")
+    own = daily_df["close"].dropna()
+    own = own[(own.index >= start) & (own.index <= end + pd.Timedelta(days=1))]
+    total = own.iloc[-1] / own.iloc[0] - 1 if len(own) > 1 else None
+    years = (own.index[-1] - own.index[0]).days / 365.25 if len(own) > 1 else 0
+    cagr = (1 + total) ** (1 / years) - 1 if total is not None and years >= 1 and total > -1 else None
+    period = f"{own.index[0]:%b %Y} to {own.index[-1]:%b %Y}" if len(own) > 1 else ""
+    cols[4].metric(f"Price CAGR ({years:.0f}y)" if years >= 1 else "Price CAGR", fmt(cagr, percent=True),
+                   help=f"Average price growth per year over the time range in the sidebar ({period}), "
+                        "without dividends. Shown for 1 year or longer.")
+    cols[5].metric(f"Total growth ({years:.0f}y)" if years >= 1 else "Total growth", fmt(total, percent=True),
+                   help=f"Price change over the time range in the sidebar ({period}), without dividends.")
 
     # ---- Graph ----
     def series_for(metric: str) -> pd.Series:
