@@ -31,6 +31,12 @@ def load_manual():
 
 
 @st.cache_data(ttl=600)
+def load_close(ticker: str) -> pd.Series:
+    prices = read_csv(DATA_DIR / ticker / "daily.csv", index_col="date", parse_dates=["date"])
+    return prices["close"].dropna() if not prices.empty else pd.Series(dtype=float)
+
+
+@st.cache_data(ttl=600)
 def load_stock(ticker: str):
     folder = DATA_DIR / ticker
     prices = read_csv(folder / "daily.csv", index_col="date", parse_dates=["date"])
@@ -41,7 +47,13 @@ def load_stock(ticker: str):
     q = metrics.quarterly(sq, man) if not (sq.empty and man.empty) else pd.DataFrame()
     a = metrics.annual(sq, sa, man) if not (sq.empty and sa.empty and man.empty) else pd.DataFrame()
     md = m["daily"][m["daily"]["ticker"] == ticker]
-    d = metrics.daily(prices, q, md, a)
+    row = load_watchlist().set_index("ticker").loc[ticker]
+    fx = None
+    if row.get("financial_currency") and row["financial_currency"] != row["currency"]:
+        rates = read_csv(DATA_DIR / "_fx" / f"{row['financial_currency']}{row['currency']}.csv",
+                         index_col="date", parse_dates=["date"])
+        fx = rates["close"] if not rates.empty else None
+    d = metrics.daily(prices, q, md, a, fx, float(row.get("adr_ratio") or 1))
     return d, q, a, metrics.dcf(m["dcf"], ticker)
 
 
@@ -122,6 +134,15 @@ def stock_page():
         "Show DCF range boxes", value=not dcf_df.empty, disabled=dcf_df.empty or "close" not in selected,
         help="One box per quarter from the DCF low end to the high end, with the middle as a line. "
              "Shown with the Price variable.")
+
+    st.sidebar.markdown("### Compare")
+    indices = watchlist[watchlist["type"] == "index"]["ticker"].tolist()
+    others = [t for t in indices + watchlist[watchlist["type"] != "index"]["ticker"].tolist() if t != ticker]
+    names = watchlist.set_index("ticker")["name"]
+    compare = st.sidebar.multiselect(
+        "Compare performance with", others, format_func=lambda t: f"{t} · {names[t]}",
+        help="Shows how much the price rose or fell (in %) since the start of the time range, "
+             "for this stock and the ones you pick, e.g. the S&P 500 and Nasdaq 100.")
 
     # ---- Header ----
     last = daily_df.dropna(subset=["close"]).iloc[-1]
@@ -232,6 +253,9 @@ def stock_page():
                        dict(step="all", label="All")])))
     st.plotly_chart(fig, use_container_width=True)
 
+    if compare:
+        perf_chart(ticker, compare, names, start, end)
+
     if selected:
         legend_cols = st.columns(len(selected))
         for col, metric in zip(legend_cols, selected):
@@ -263,8 +287,46 @@ def stock_page():
         else:
             st.dataframe(dcf_df.sort_index(ascending=False), use_container_width=True)
 
-    st.caption(f"All values in {stock['currency']}. Sources: SEC EDGAR (US), Yahoo Finance, and manual entries "
+    fin = stock.get("financial_currency") or stock["currency"]
+    currency_note = (f"Prices in {stock['currency']}; financial statements in {fin} "
+                     f"(converted to {stock['currency']} for P/E and similar ratios)."
+                     if fin != stock["currency"] else f"All values in {stock['currency']}.")
+    st.caption(f"{currency_note} Sources: SEC EDGAR (US), Yahoo Finance, and manual entries "
                "(manual values always win). TTM = trailing 12 months. Quarters are calendar quarters.")
+
+
+def perf_chart(ticker, compare, names, start, end):
+    """Price change in % since the first date all chosen series have in common."""
+    log_scale = st.radio("Comparison scale", ["Logarithmic", "Raw"], horizontal=True,
+                         help="Logarithmic: the same % growth looks the same at any time, which makes long "
+                              "periods comparable. Raw: change in %.") == "Logarithmic"
+    series = {t: load_close(t) for t in [ticker, *compare]}
+    series = {t: s[(s.index >= start) & (s.index <= end + pd.Timedelta(days=1))] for t, s in series.items()}
+    series = {t: s for t, s in series.items() if not s.empty}
+    if len(series) < 2:
+        st.info("Not enough overlapping price history to compare.")
+        return
+    common_start = max(s.index.min() for s in series.values())
+    fig = go.Figure()
+    for i, (t, s) in enumerate(series.items()):
+        s = s[s.index >= common_start]
+        change = s / s.iloc[0] - 1
+        years = (s.index[-1] - s.index[0]).days / 365.25
+        per_year = (1 + change.iloc[-1]) ** (1 / years) - 1 if years >= 1 and change.iloc[-1] > -1 else None
+        per_year_text = f", {per_year:+.1%}/yr" if per_year is not None else ""
+        fig.add_trace(go.Scatter(
+            x=change.index, y=(1 + change) if log_scale else change, mode="lines",
+            name=f"{t} · {names[t]} ({change.iloc[-1]:+.0%}{per_year_text})",
+            line=dict(width=2.5 if t == ticker else 1.5, color=COLORS[i % len(COLORS)] if t == ticker else None),
+            hovertemplate="%{y:.1%}<extra>" + t + "</extra>" if not log_scale else "%{y:.2f}×<extra>" + t + "</extra>"))
+    fig.update_layout(
+        title=f"Performance since {common_start:%d %b %Y}", height=420, hovermode="x unified",
+        margin=dict(l=60, r=30, t=50, b=30), legend=dict(orientation="h", y=-0.15),
+        yaxis=dict(title="Growth of 1 (×)" if log_scale else "Change since start",
+                   type="log" if log_scale else "linear", tickformat=None if log_scale else ".0%"))
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Price change only, without dividends. Starts on the first date all chosen series have data, "
+               "within the time range.")
 
 
 # ---------------------------------------------------------------- screener page

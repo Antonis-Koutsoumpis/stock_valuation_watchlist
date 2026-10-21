@@ -162,10 +162,15 @@ def _as_of(dates: pd.DataFrame, table: pd.DataFrame) -> pd.DataFrame:
 
 
 def daily(prices: pd.DataFrame, quarterly_df: pd.DataFrame, manual_daily: pd.DataFrame,
-          annual_df: pd.DataFrame | None = None) -> pd.DataFrame:
+          annual_df: pd.DataFrame | None = None, fx: pd.Series | None = None,
+          adr_ratio: float = 1.0) -> pd.DataFrame:
     """Daily metrics: Yahoo's snapshot where captured, otherwise back-calculated from the
     close and the latest published figures: the last 4 quarters (period end + 45 days),
-    or, where quarters are missing, the last yearly report (year end + 90 days)."""
+    or, where quarters are missing, the last yearly report (year end + 90 days).
+
+    `fx`: daily rate from the reporting currency to the price currency, for stocks that
+    report in another currency (e.g. TSMC: TWD -> USD). `adr_ratio`: ordinary shares per
+    traded share (TSMC: 1 ADR = 5 shares)."""
     if prices.empty:
         return prices
     d = prices.sort_index().copy()
@@ -184,6 +189,14 @@ def daily(prices: pd.DataFrame, quarterly_df: pd.DataFrame, manual_daily: pd.Dat
         yearly = _as_of(dates, a[["available"] + [c for c in cols if c in a]]).reindex(columns=cols)
         basis = basis.combine_first(yearly)
     basis = basis.apply(pd.to_numeric, errors="coerce")
+    if fx is not None and not fx.empty:
+        rate = fx.sort_index().reindex(d.index, method="ffill")
+        for col in ["eps_diluted_ttm", "revenue_ttm", "bvps", "dividends_per_share_ttm"]:
+            basis[col] = basis[col] * rate
+    if adr_ratio and adr_ratio != 1:
+        for col in ["eps_diluted_ttm", "bvps", "dividends_per_share_ttm"]:
+            basis[col] = basis[col] * adr_ratio
+        basis["shares_outstanding"] = basis["shares_outstanding"] / adr_ratio
     close = d["close"]
     calc = {
         "trailing_pe": close / basis["eps_diluted_ttm"].where(basis["eps_diluted_ttm"] > 0),

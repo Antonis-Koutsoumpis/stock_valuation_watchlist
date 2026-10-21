@@ -1,5 +1,139 @@
-ticker,name,yahoo_symbol,currency,sec_cik,type
-AMZN,Amazon.com Inc.,AMZN,USD,0001018724,stock
-FTK,flatexDEGIRO AG,FTK.DE,EUR,,stock
-SPX,S&P 500,^GSPC,USD,,index
-NDX,Nasdaq-100,^NDX,USD,,index
+ticker,name,yahoo_symbol,currency,sec_cik,type,financial_currency,adr_ratio
+AAPL,Apple Inc.,AAPL,USD,,stock,USD,1
+ABBV,AbbVie Inc.,ABBV,USD,,stock,USD,1
+ABNB,"Airbnb, Inc.",ABNB,USD,,stock,USD,1
+ACN,Accenture plc,ACN,USD,,stock,USD,1
+ADBE,Adobe Inc.,ADBE,USD,,stock,USD,1
+ADP,"Automatic Data Processing, Inc.",ADP,USD,,stock,USD,1
+ADS,adidas AG,ADS.DE,EUR,,stock,EUR,1
+ADYEN,Adyen N.V.,ADYEN.AS,EUR,,stock,EUR,1
+AMAT,"Applied Materials, Inc.",AMAT,USD,,stock,USD,1
+AMD,"Advanced Micro Devices, Inc.",AMD,USD,,stock,USD,1
+AMGN,Amgen Inc.,AMGN,USD,,stock,USD,1
+AMUN,Amundi S.A.,AMUN.PA,EUR,,stock,EUR,1
+AMZN,"Amazon.com, Inc.",AMZN,USD,0001018724,stock,USD,1
+ANET,"Arista Networks, Inc.",ANET,USD,,stock,USD,1
+ARM,Arm Holdings plc,ARM,USD,,stock,USD,1
+ASML,ASML Holding N.V.,ASML.AS,EUR,,stock,EUR,1
+AVGO,Broadcom Inc.,AVGO,USD,,stock,USD,1
+AXP,American Express Company,AXP,USD,,stock,USD,1
+AZO,"AutoZone, Inc.",AZO,USD,,stock,USD,1
+BAC,Bank of America Corporation,BAC,USD,,stock,USD,1
+BE,Bloom Energy Corporation,BE,USD,,stock,USD,1
+BEI,Beiersdorf Aktiengesellschaft,BEI.DE,EUR,,stock,EUR,1
+BKNG,Booking Holdings Inc.,BKNG,USD,,stock,USD,1
+BRK-B,Berkshire Hathaway Inc.,BRK-B,USD,,stock,USD,1
+BSX,Boston Scientific Corporation,BSX,USD,,stock,USD,1
+BWXT,"BWX Technologies, Inc.",BWXT,USD,,stock,USD,1
+CAT,Caterpillar Inc.,CAT,USD,,stock,USD,1
+CCJ,Cameco Corporation,CCJ,USD,,stock,CAD,1
+CEG,Constellation Energy Corporation,CEG,USD,,stock,USD,1
+CELH,"Celsius Holdings, Inc.",CELH,USD,,stock,USD,1
+CMCSA,Comcast Corporation,CMCSA,USD,,stock,USD,1
+CMG,"Chipotle Mexican Grill, Inc.",CMG,USD,,stock,USD,1
+CMI,Cummins Inc.,CMI,USD,,stock,USD,1
+COST,Costco Wholesale Corporation,COST,USD,,stock,USD,1
+CRDO,Credo Technology Group Holding Ltd,CRDO,USD,,stock,USD,1
+CRM,"Salesforce, Inc.",CRM,USD,,stock,USD,1
+CRWD,"CrowdStrike Holdings, Inc.",CRWD,USD,,stock,USD,1
+CRWV,"CoreWeave, Inc.",CRWV,USD,,stock,USD,1
+CSCO,"Cisco Systems, Inc.",CSCO,USD,,stock,USD,1
+CSGP,"CoStar Group, Inc.",CSGP,USD,,stock,USD,1
+CTAS,Cintas Corporation,CTAS,USD,,stock,USD,1
+DASH,"DoorDash, Inc.",DASH,USD,,stock,USD,1
+DDOG,"Datadog, Inc.",DDOG,USD,,stock,USD,1
+DELL,Dell Technologies Inc.,DELL,USD,,stock,USD,1
+FISV,"Fiserv, Inc.",FISV,USD,,stock,USD,1
+FRHC,Freedom Holdings Corp.,FRHC,USD,,stock,USD,1
+FROG,JFrog Ltd.,FROG,USD,,stock,USD,1
+FTK,flatexDEGIRO SE,FTK.DE,EUR,,stock,EUR,1
+FTNT,"Fortinet, Inc.",FTNT,USD,,stock,USD,1
+GOOGL,Alphabet Inc.,GOOGL,USD,,stock,USD,1
+GS,"The Goldman Sachs Group, Inc.",GS,USD,,stock,USD,1
+HDFCBANK,HDFC Bank Limited,HDFCBANK.NS,INR,,stock,INR,1
+IBM,International Business Machines Corporation,IBM,USD,,stock,USD,1
+INTC,Intel Corporation,INTC,USD,,stock,USD,1
+INTU,Intuit Inc.,INTU,USD,,stock,USD,1
+IONS,"Ionis Pharmaceuticals, Inc.",IONS,USD,,stock,USD,1
+IREN,IREN Limited,IREN,USD,,stock,USD,1
+ISRG,"Intuitive Surgical, Inc.",ISRG,USD,,stock,USD,1
+JNJ,Johnson & Johnson,JNJ,USD,,stock,USD,1
+JPM,JPMorgan Chase & Co.,JPM,USD,,stock,USD,1
+KEEL,Keel Infrastructure Corp.,KEEL,USD,,stock,USD,1
+KLAC,KLA Corporation,KLAC,USD,,stock,USD,1
+KO,The Coca-Cola Company,KO,USD,,stock,USD,1
+LLY,Eli Lilly and Company,LLY,USD,,stock,USD,1
+LRCX,Lam Research Corporation,LRCX,USD,,stock,USD,1
+MA,Mastercard Incorporated,MA,USD,,stock,USD,1
+MARA,"MARA Holdings, Inc.",MARA,USD,,stock,USD,1
+MC,"LVMH Moët Hennessy - Louis Vuitton, Société Européenne",MC.PA,EUR,,stock,EUR,1
+MCD,McDonald's Corporation,MCD,USD,,stock,USD,1
+MCO,Moody's Corporation,MCO,USD,,stock,USD,1
+MDB,"MongoDB, Inc.",MDB,USD,,stock,USD,1
+MELI,"MercadoLibre, Inc.",MELI,USD,,stock,USD,1
+META,"Meta Platforms, Inc.",META,USD,,stock,USD,1
+MRK,"Merck & Co., Inc.",MRK,USD,,stock,USD,1
+MRVL,"Marvell Technology, Inc.",MRVL,USD,,stock,USD,1
+MS,Morgan Stanley,MS,USD,,stock,USD,1
+MSFT,Microsoft Corporation,MSFT,USD,,stock,USD,1
+MU,"Micron Technology, Inc.",MU,USD,,stock,USD,1
+NBIS,Nebius Group N.V.,NBIS,USD,,stock,USD,1
+NEE,"NextEra Energy, Inc.",NEE,USD,,stock,USD,1
+NFLX,"Netflix, Inc.",NFLX,USD,,stock,USD,1
+NKE,"NIKE, Inc.",NKE,USD,,stock,USD,1
+NOVO-B,Novo Nordisk A/S,NOVO-B.CO,DKK,,stock,DKK,1
+NOW,"ServiceNow, Inc.",NOW,USD,,stock,USD,1
+NU,Nu Holdings Ltd.,NU,USD,,stock,USD,1
+NVDA,NVIDIA Corporation,NVDA,USD,,stock,USD,1
+O,Realty Income Corporation,O,USD,,stock,USD,1
+OKLO,Oklo Inc.,OKLO,USD,,stock,USD,1
+OR,L'Oréal S.A.,OR.PA,EUR,,stock,EUR,1
+ORCL,Oracle Corporation,ORCL,USD,,stock,USD,1
+ORLY,"O'Reilly Automotive, Inc.",ORLY,USD,,stock,USD,1
+PEP,"PepsiCo, Inc.",PEP,USD,,stock,USD,1
+PG,The Procter & Gamble Company,PG,USD,,stock,USD,1
+PLTR,Palantir Technologies Inc.,PLTR,USD,,stock,USD,1
+PRCT,PROCEPT BioRobotics Corporation,PRCT,USD,,stock,USD,1
+PU8,Public Power Corporation S.A.,PU8.F,EUR,,stock,EUR,1
+PYPL,"PayPal Holdings, Inc.",PYPL,USD,,stock,USD,1
+QCOM,QUALCOMM Incorporated,QCOM,USD,,stock,USD,1
+RACE,Ferrari N.V.,RACE.MI,EUR,,stock,EUR,1
+REY,Reply S.p.A.,REY.MI,EUR,,stock,EUR,1
+RMS,Hermès International Société en commandite par actions,RMS.PA,EUR,,stock,EUR,1
+SAP,SAP SE,SAP,USD,,stock,EUR,1
+SBUX,Starbucks Corporation,SBUX,USD,,stock,USD,1
+SMCI,"Super Micro Computer, Inc.",SMCI,USD,,stock,USD,1
+SMR,NuScale Power Corporation,SMR,USD,,stock,USD,1
+SNDK,Sandisk Corporation,SNDK,USD,,stock,USD,1
+SNOW,Snowflake Inc.,SNOW,USD,,stock,USD,1
+SNPS,"Synopsys, Inc.",SNPS,USD,,stock,USD,1
+SOFI,"SoFi Technologies, Inc.",SOFI,USD,,stock,USD,1
+SPGI,S&P Global Inc.,SPGI,USD,,stock,USD,1
+SPOT,Spotify Technology S.A.,SPOT,USD,,stock,EUR,1
+SU,Schneider Electric S.E.,SU.PA,EUR,,stock,EUR,1
+SYNA,Synaptics Incorporated,SYNA,USD,,stock,USD,1
+TEM,"Tempus AI, Inc.",TEM,USD,,stock,USD,1
+TGT,Target Corporation,TGT,USD,,stock,USD,1
+TMUS,"T-Mobile US, Inc.",TMUS,USD,,stock,USD,1
+TRV,"The Travelers Companies, Inc.",TRV,USD,,stock,USD,1
+TSLA,"Tesla, Inc.",TSLA,USD,,stock,USD,1
+TSM,Taiwan Semiconductor Manufacturing Company Limited,TSM,USD,,stock,TWD,5
+TTWO,"Take-Two Interactive Software, Inc.",TTWO,USD,,stock,USD,1
+TWLO,Twilio Inc.,TWLO,USD,,stock,USD,1
+TXRH,"Texas Roadhouse, Inc.",TXRH,USD,,stock,USD,1
+UBER,"Uber Technologies, Inc.",UBER,USD,,stock,USD,1
+UNH,UnitedHealth Group Incorporated,UNH,USD,,stock,USD,1
+UUUU,Energy Fuels Inc.,UUUU,USD,,stock,USD,1
+V,Visa Inc.,V,USD,,stock,USD,1
+VRT,Vertiv Holdings Co,VRT,USD,,stock,USD,1
+VST,Vistra Corp.,VST,USD,,stock,USD,1
+VZ,Verizon Communications Inc.,VZ,USD,,stock,USD,1
+WDC,Western Digital Corporation,WDC,USD,,stock,USD,1
+WKL,Wolters Kluwer N.V.,WKL.AS,EUR,,stock,EUR,1
+WMT,Walmart Inc.,WMT,USD,,stock,USD,1
+XOM,ExxonMobil Holdings Corporation,XOM,USD,,stock,USD,1
+ZETA,Zeta Global Holdings Corp.,ZETA,USD,,stock,USD,1
+ZS,"Zscaler, Inc.",ZS,USD,,stock,USD,1
+ZTS,Zoetis Inc.,ZTS,USD,,stock,USD,1
+NDX,Nasdaq-100,^NDX,USD,,index,USD,1
+SPX,S&P 500,^GSPC,USD,,index,USD,1

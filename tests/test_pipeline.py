@@ -225,3 +225,14 @@ def test_daily_falls_back_to_yearly_figures():
     assert np.isnan(d["trailing_pe"].iloc[0])
     assert d["trailing_pe"].iloc[1:].tolist() == [10.0, 10.0]
     assert d["price_book"].iloc[1:].tolist() == [2.0, 3.0]
+
+
+def test_daily_converts_reporting_currency_and_adr_ratio():
+    q = metrics.quarterly(_statements(QUARTERS, **BASE), pd.DataFrame(columns=["period", "metric", "value", "source"]))
+    dates = pd.DatetimeIndex(pd.to_datetime(["2025-06-02"]), name="date")
+    prices = pd.DataFrame({"close": [100.0]}, index=dates)
+    fx = pd.Series([0.5], index=pd.to_datetime(["2025-06-01"]))  # 1 unit of reporting currency = 0.5 USD
+    d = metrics.daily(prices, q, pd.DataFrame(columns=["ticker", "date", "metric", "value"]), None, fx, 5)
+    # TTM EPS 4 -> 2 USD per share -> 10 USD per ADR (5 shares)
+    assert d["trailing_pe"].iloc[0] == pytest.approx(10.0)
+    assert d["price_book"].iloc[0] == pytest.approx(100 / (30 * 0.5 * 5))
