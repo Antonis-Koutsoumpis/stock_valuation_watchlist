@@ -1,33 +1,58 @@
-"""One row of latest values per stock, and AND-filters on them."""
+"""One row of values per stock (precomputed by the daily update), and AND-filters on them."""
 
 import operator
+from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from .glossary import CAGR_HELP, DAILY, QUARTERLY, YEARLY, Metric
+from .glossary import CAGR_HELP, DAILY, QUARTERLY
 
-COLUMNS = {
-    "close": DAILY["close"],
-    "trailing_pe": DAILY["trailing_pe"],
-    "forward_pe": DAILY["forward_pe"],
-    "price_book": DAILY["price_book"],
-    "trailing_div_yield": DAILY["trailing_div_yield"],
-    "roic_ttm": QUARTERLY["roic_ttm"],
-    "roic": YEARLY["roic"],
-    "bvps": QUARTERLY["bvps"],
-    "eps_diluted_ttm": QUARTERLY["eps_diluted_ttm"],
-    "net_debt_fcf_ttm": QUARTERLY["net_debt_fcf_ttm"],
-    **{f"{m}_cagr_5y": Metric(f"{YEARLY[m].label} growth 5y", CAGR_HELP, "Yearly", percent=True)
-       for m in ["roic", "bvps", "revenue", "eps_diluted", "fcf"]},
-    **{f"{m}_cagr_1y": Metric(f"{YEARLY[m].label} growth 1y", CAGR_HELP, "Yearly", percent=True)
-       for m in ["bvps", "revenue", "eps_diluted", "fcf"]},
-    "dcf_middle": Metric("DCF middle", "Latest middle estimate of what one share is worth.", "Quarterly (entered by hand)"),
-    "price_to_dcf": Metric("Price / DCF middle",
-                           "Price ÷ DCF middle. Below 1 = the share trades below its estimated value.",
-                           "Daily"),
-}
+SUMMARY_PATH = Path(__file__).resolve().parent.parent / "data" / "_summary" / "screener.csv"
+YEARS = range(1, 11)
+GROWTH = {"bvps": "BVPS", "eps_diluted": "EPS", "revenue": "Revenue", "fcf": "Free Cash Flow"}
 OPERATORS = {">": operator.gt, ">=": operator.ge, "<": operator.lt, "<=": operator.le, "=": operator.eq}
+
+
+@dataclass(frozen=True)
+class Filter:
+    help: str
+    periods: dict  # period label -> summary column
+    percent: bool = False
+
+
+def _years(fmt: str) -> dict:
+    return {f"{n}y": fmt.format(n=n) for n in YEARS}
+
+
+FILTERS = {
+    "ROIC": Filter("Return on invested capital. Latest = last 12 months; Ny = average of the last N years. "
+                   "Rule #1 looks for 10% or more.",
+                   {"Latest": "roic_ttm", **_years("roic_avg_{n}y")}, percent=True),
+    **{f"{label} growth": Filter(f"{label} growth per year over the last N years (CAGR). {CAGR_HELP}",
+                                 _years(f"{key}_cagr_{{n}}y"), percent=True)
+       for key, label in GROWTH.items()},
+    "Trailing P/E": Filter(DAILY["trailing_pe"].help, {"Latest": "trailing_pe"}),
+    "Forward P/E": Filter(DAILY["forward_pe"].help, {"Latest": "forward_pe"}),
+    "Price/Book": Filter(DAILY["price_book"].help, {"Latest": "price_book"}),
+    "Dividend yield": Filter(DAILY["trailing_div_yield"].help, {"Latest": "trailing_div_yield"}, percent=True),
+    "Net Debt / FCF": Filter(QUARTERLY["net_debt_fcf_ttm"].help, {"Latest": "net_debt_fcf_ttm"}),
+    "BVPS": Filter(QUARTERLY["bvps"].help, {"Latest": "bvps"}),
+    "Price": Filter(DAILY["close"].help, {"Latest": "close"}),
+    "Price / DCF middle": Filter("Price ÷ DCF middle. Below 1 = the share trades below its estimated value.",
+                                 {"Latest": "price_to_dcf"}),
+}
+PERIODS = ["Latest", *[f"{n}y" for n in YEARS]]
+
+# Phil Town's Big 5: each should be 10% or more a year, over 10, 5 and 1 years.
+DEFAULT_CONDITIONS = pd.DataFrame([
+    {"metric": "ROIC", "period": "10y", "operator": ">=", "value": 10.0},
+    {"metric": "BVPS growth", "period": "10y", "operator": ">=", "value": 10.0},
+    {"metric": "EPS growth", "period": "10y", "operator": ">=", "value": 10.0},
+    {"metric": "Revenue growth", "period": "10y", "operator": ">=", "value": 10.0},
+    {"metric": "Free Cash Flow growth", "period": "10y", "operator": ">=", "value": 10.0},
+])
 
 
 def _last(df: pd.DataFrame, col: str):
@@ -38,25 +63,51 @@ def _last(df: pd.DataFrame, col: str):
 
 def summary_row(daily: pd.DataFrame, quarterly: pd.DataFrame, annual: pd.DataFrame, dcf: pd.DataFrame) -> dict:
     row = {c: _last(daily, c) for c in ["close", "trailing_pe", "forward_pe", "price_book", "trailing_div_yield"]}
-    row.update({c: _last(quarterly, c) for c in ["roic_ttm", "bvps", "eps_diluted_ttm", "net_debt_fcf_ttm"]})
-    row["roic"] = _last(annual, "roic")
-    for col in COLUMNS:
-        if "_cagr_" in col:
-            row[col] = _last(annual, col)
+    row.update({c: _last(quarterly, c) for c in ["roic_ttm", "bvps", "net_debt_fcf_ttm"]})
+    roic = annual["roic"].dropna() if "roic" in annual else pd.Series(dtype=float)
+    for n in YEARS:
+        row[f"roic_avg_{n}y"] = roic.iloc[-n:].mean() if len(roic) >= n else np.nan
+        for key in GROWTH:
+            row[f"{key}_cagr_{n}y"] = _last(annual, f"{key}_cagr_{n}y")
     row["dcf_middle"] = _last(dcf, "middle")
     row["price_to_dcf"] = row["close"] / row["dcf_middle"] if row["dcf_middle"] else np.nan
     return row
 
 
+def build_summary(watchlist: pd.DataFrame, load) -> pd.DataFrame:
+    """`load(row)` -> (daily, quarterly, yearly, dcf). Indices are left out."""
+    rows = {}
+    for ticker, r in watchlist.set_index("ticker").iterrows():
+        if r.get("type") == "index":
+            continue
+        try:
+            rows[ticker] = {"name": r["name"], "currency": r["currency"], **summary_row(*load(r))}
+        except Exception as exc:  # one broken stock must not hide the others
+            print(f"screener: {ticker} skipped: {exc}")
+    table = pd.DataFrame.from_dict(rows, orient="index")
+    table.index.name = "ticker"
+    return table
+
+
+def resolve(metric, period) -> tuple[str, str, Filter] | None:
+    """(summary column, display label, filter) for a condition, or None if it doesn't apply."""
+    f = FILTERS.get(metric)
+    if f is None:
+        return None
+    if not isinstance(period, str) or period not in f.periods:
+        period = next(iter(f.periods)) if len(f.periods) == 1 else None
+    return (f.periods[period], f"{metric} ({period})", f) if period else None
+
+
 def apply_filters(table: pd.DataFrame, conditions: pd.DataFrame) -> pd.DataFrame:
-    """conditions: rows of (metric label, operator, value). Percent metrics take values in %
-    (10 means 10%). All conditions must hold (AND). A stock with no value fails the condition."""
-    by_label = {m.label: (key, m) for key, m in COLUMNS.items()}
+    """All conditions must hold (AND). Percent metrics take values in % (10 means 10%).
+    A stock with no value for a condition fails it."""
     mask = pd.Series(True, index=table.index)
     for c in conditions.dropna(subset=["metric", "operator", "value"]).itertuples():
-        if c.metric not in by_label or c.operator not in OPERATORS:
+        resolved = resolve(c.metric, getattr(c, "period", None))
+        if resolved is None or c.operator not in OPERATORS or resolved[0] not in table:
             continue
-        key, meta = by_label[c.metric]
-        value = float(c.value) / 100 if meta.percent else float(c.value)
-        mask &= OPERATORS[c.operator](table[key], value).fillna(False)
+        column, _, f = resolved
+        value = float(c.value) / 100 if f.percent else float(c.value)
+        mask &= OPERATORS[c.operator](table[column], value).fillna(False)
     return table[mask]

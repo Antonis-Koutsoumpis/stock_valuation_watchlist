@@ -178,11 +178,23 @@ def test_trailing_average():
 
 def test_screener_and_filters():
     from rule1 import screener
-    table = pd.DataFrame({"roic_ttm": [0.15, 0.05, np.nan], "bvps": [12.0, 20.0, 30.0]}, index=["A", "B", "C"])
-    table = table.reindex(columns=list(screener.COLUMNS))
-    cond = pd.DataFrame([{"metric": "ROIC (TTM)", "operator": ">", "value": 10},
-                         {"metric": "BVPS", "operator": ">", "value": 10}])
+    table = pd.DataFrame({"roic_avg_10y": [0.15, 0.05, np.nan], "bvps_cagr_5y": [0.12, 0.20, 0.30],
+                          "trailing_pe": [15.0, 30.0, 10.0]}, index=["A", "B", "C"])
+    cond = pd.DataFrame([{"metric": "ROIC", "period": "10y", "operator": ">=", "value": 10},
+                         {"metric": "BVPS growth", "period": "5y", "operator": ">", "value": 10},
+                         {"metric": "Trailing P/E", "period": None, "operator": "<", "value": 20}])
     assert list(screener.apply_filters(table, cond).index) == ["A"]
+    # A growth metric without a period is ignored rather than guessed.
+    only = pd.DataFrame([{"metric": "BVPS growth", "period": None, "operator": ">", "value": 10}])
+    assert len(screener.apply_filters(table, only)) == 3
+
+
+def test_screener_summary_roic_average():
+    from rule1 import screener
+    annual = pd.DataFrame({"roic": [0.05, 0.10, 0.20]}, index=["2023", "2024", "2025"])
+    row = screener.summary_row(pd.DataFrame(), pd.DataFrame(), annual, pd.DataFrame())
+    assert row["roic_avg_2y"] == pytest.approx(0.15)
+    assert np.isnan(row["roic_avg_5y"])
 
 
 def test_sec_split_adjustment():

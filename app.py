@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from rule1 import charts, manual, metrics, screener
+from rule1 import build, charts, manual, metrics, screener
 from rule1.glossary import CAGR_HELP, DAILY, DCF, GRAPH, QUARTERLY, YEARLY, Metric
 from rule1.periods import quarter_end, quarter_start
 from rule1.store import DATA_DIR, read_csv
@@ -38,23 +38,7 @@ def load_close(ticker: str) -> pd.Series:
 
 @st.cache_data(ttl=600)
 def load_stock(ticker: str):
-    folder = DATA_DIR / ticker
-    prices = read_csv(folder / "daily.csv", index_col="date", parse_dates=["date"])
-    sq = read_csv(folder / "quarterly.csv", dtype={"period": str})
-    sa = read_csv(folder / "annual.csv", dtype={"period": str})
-    m = load_manual()
-    man = manual.statements_for(m, ticker)
-    q = metrics.quarterly(sq, man) if not (sq.empty and man.empty) else pd.DataFrame()
-    a = metrics.annual(sq, sa, man) if not (sq.empty and sa.empty and man.empty) else pd.DataFrame()
-    md = m["daily"][m["daily"]["ticker"] == ticker]
-    row = load_watchlist().set_index("ticker").loc[ticker]
-    fx = None
-    if row.get("financial_currency") and row["financial_currency"] != row["currency"]:
-        rates = read_csv(DATA_DIR / "_fx" / f"{row['financial_currency']}{row['currency']}.csv",
-                         index_col="date", parse_dates=["date"])
-        fx = rates["close"] if not rates.empty else None
-    d = metrics.daily(prices, q, md, a, fx, float(row.get("adr_ratio") or 1))
-    return d, q, a, metrics.dcf(m["dcf"], ticker)
+    return build.load_stock(load_watchlist().set_index("ticker").loc[ticker], load_manual())
 
 
 def fmt(value, percent=False):
@@ -330,37 +314,57 @@ def perf_chart(ticker, compare, names, start, end):
 
 
 # ---------------------------------------------------------------- screener page
+@st.cache_data(ttl=600)
+def load_screener_table() -> pd.DataFrame:
+    if screener.SUMMARY_PATH.exists():
+        return pd.read_csv(screener.SUMMARY_PATH, index_col="ticker")
+    # Not built yet (before the first daily update): calculate it now, once.
+    return screener.build_summary(load_watchlist(), lambda row: build.load_stock(row, load_manual()))
+
+
 def screener_page():
     st.title("Screener")
-    st.write("Find watchlist stocks that meet all your conditions. Percent metrics take percent values "
-             "(type 10 for 10%).")
-    watchlist = load_watchlist()
-    rows = {}
-    for r in watchlist.itertuples():
-        d, q, a, dcf = load_stock(r.ticker)
-        rows[r.ticker] = {"name": r.name, "currency": r.currency, **screener.summary_row(d, q, a, dcf)}
-    table = pd.DataFrame.from_dict(rows, orient="index")
+    st.write("Find watchlist stocks that meet all your conditions. The default conditions are Phil Town's "
+             "Big 5: ROIC, and growth of BVPS, EPS, Revenue and Free Cash Flow, each 10% or more a year. "
+             "Change the period (1 to 10 years), remove a row, or add your own. Percent metrics take "
+             "percent values (type 10 for 10%).")
+    table = load_screener_table()
 
-    labels = [m.label for m in screener.COLUMNS.values()]
-    default = pd.DataFrame([{"metric": "ROIC (TTM)", "operator": ">", "value": 10.0}])
     conditions = st.data_editor(
-        default, num_rows="dynamic", use_container_width=True, key="conditions",
+        screener.DEFAULT_CONDITIONS, num_rows="dynamic", use_container_width=True, key="conditions",
         column_config={
-            "metric": st.column_config.SelectboxColumn("Metric", options=labels, required=True),
+            "metric": st.column_config.SelectboxColumn("Metric", options=list(screener.FILTERS), required=True,
+                                                       help="Hover the column headers of the results for what each means."),
+            "period": st.column_config.SelectboxColumn(
+                "Period", options=screener.PERIODS,
+                help="Latest = today's value or the last 12 months. Ny = over the last N years: the yearly "
+                     "growth (CAGR) for growth metrics, the average for ROIC."),
             "operator": st.column_config.SelectboxColumn("Condition", options=list(screener.OPERATORS), required=True),
             "value": st.column_config.NumberColumn("Value", help="For percent metrics, 10 means 10%.", required=True),
         })
+    resolved = [screener.resolve(c.metric, c.period) for c in conditions.dropna(subset=["metric"]).itertuples()]
+    for c, r in zip(conditions.dropna(subset=["metric"]).itertuples(), resolved):
+        if r is None:
+            st.warning(f"'{c.metric}' needs one of these periods: {', '.join(screener.FILTERS[c.metric].periods)}"
+                       if c.metric in screener.FILTERS else f"Unknown metric '{c.metric}'.")
     result = screener.apply_filters(table, conditions)
-    st.caption(f"{len(result)} of {len(table)} stocks meet all conditions.")
+    st.caption(f"{len(result)} of {len(table)} stocks meet all conditions. Stocks without enough history "
+               "for a condition don't pass it (most non-US stocks have 4 years until older data is added).")
 
-    shown = result.copy()
+    columns = {"close": ("Price", screener.FILTERS["Price"]), "trailing_pe": ("Trailing P/E", screener.FILTERS["Trailing P/E"])}
+    for r in resolved:
+        if r:
+            columns[r[0]] = (r[1], r[2])
+    shown = result[["name", "currency", *[c for c in columns if c in result]]].copy()
     config = {"name": st.column_config.Column("Name"), "currency": st.column_config.Column("Currency")}
-    for key, meta in screener.COLUMNS.items():
-        if meta.percent:
-            shown[key] = shown[key] * 100
-        config[key] = st.column_config.NumberColumn(meta.label, help=meta.tooltip,
-                                                    format="%.1f%%" if meta.percent else "%.2f")
-    st.dataframe(shown[["name", "currency", *screener.COLUMNS]], use_container_width=True, column_config=config)
+    for col, (label, f) in columns.items():
+        if col not in shown:
+            continue
+        if f.percent:
+            shown[col] = shown[col] * 100
+        config[col] = st.column_config.NumberColumn(label, help=f.help, format="%.1f%%" if f.percent else "%.2f")
+    st.dataframe(shown, use_container_width=True, column_config=config)
+    st.caption("Values are recalculated with every daily update.")
 
 
 st.navigation([

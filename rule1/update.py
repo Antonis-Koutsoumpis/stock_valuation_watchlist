@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import fetch_sec, fetch_yahoo, manual
+from . import build, fetch_sec, fetch_yahoo, manual, screener
 from .store import DATA_DIR, merge_daily, merge_statements, stock_dir
 
 WATCHLIST = Path(__file__).resolve().parent.parent / "config" / "watchlist.csv"
@@ -84,6 +84,14 @@ def update_fx(pairs: set[str]) -> None:
         print(f"FX {pair}: {len(rates)} rows")
 
 
+def write_screener_summary(man: dict) -> None:
+    """Precomputed so the app's screener loads one small file instead of every stock."""
+    summary = screener.build_summary(load_watchlist(), lambda row: build.load_stock(row, man))
+    screener.SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    summary.to_csv(screener.SUMMARY_PATH, float_format="%.6g")
+    print(f"screener: {len(summary)} stocks")
+
+
 def main(tickers: list[str]) -> int:
     watchlist = load_watchlist()
     if tickers:
@@ -100,7 +108,9 @@ def main(tickers: list[str]) -> int:
         update_fx({p for p in map(fx_pair, watchlist.itertuples()) if p})
     except Exception:
         traceback.print_exc()
-    manual.backup(manual.load())
+    man = manual.load()
+    manual.backup(man)
+    write_screener_summary(man)
     if failed:
         print(f"Failed: {', '.join(failed)}")
     return 1 if failed and len(failed) == len(watchlist) else 0
