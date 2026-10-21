@@ -684,6 +684,7 @@ period,period_end,fiscal_label,metric,value,source,fetched_at
 2021Q3,2021-09-25,FY2021 FY,capex,3223000000,sec,2026-10-21
 2021Q3,2021-09-25,FY2021 FY,cash,3.494e+10,sec,2026-10-21
 2021Q3,2021-09-25,FY2021 FY,dividends_paid,3640000000,sec,2026-10-21
+2021Q3,2021-09-25,FY2021 FY,eps_diluted,1.23,sec,2026-10-21
 2021Q3,2021-09-25,FY2021 FY,equity,6.309e+10,sec,2026-10-21
 2021Q3,2021-09-25,FY2021 FY,net_income,2.0551e+10,sec,2026-10-21
 2021Q3,2021-09-25,FY2021 FY,operating_cash_flow,2.02e+10,sec,2026-10-21
@@ -738,6 +739,7 @@ period,period_end,fiscal_label,metric,value,source,fetched_at
 2022Q3,2022-09-24,FY2022 FY,capex,3289000000,sec,2026-10-21
 2022Q3,2022-09-24,FY2022 FY,cash,2.3646e+10,sec,2026-10-21
 2022Q3,2022-09-24,FY2022 FY,dividends_paid,3703000000,sec,2026-10-21
+2022Q3,2022-09-24,FY2022 FY,eps_diluted,1.29,sec,2026-10-21
 2022Q3,2022-09-24,FY2022 FY,equity,5.0672e+10,sec,2026-10-21
 2022Q3,2022-09-24,FY2022 FY,net_income,2.0721e+10,sec,2026-10-21
 2022Q3,2022-09-24,FY2022 FY,operating_cash_flow,2.4127e+10,sec,2026-10-21
@@ -792,6 +794,7 @@ period,period_end,fiscal_label,metric,value,source,fetched_at
 2023Q3,2023-09-30,FY2023 FY,capex,2163000000,sec,2026-10-21
 2023Q3,2023-09-30,FY2023 FY,cash,2.9965e+10,sec,2026-10-21
 2023Q3,2023-09-30,FY2023 FY,dividends_paid,3758000000,sec,2026-10-21
+2023Q3,2023-09-30,FY2023 FY,eps_diluted,1.47,sec,2026-10-21
 2023Q3,2023-09-30,FY2023 FY,equity,6.2146e+10,sec,2026-10-21
 2023Q3,2023-09-30,FY2023 FY,net_income,2.2956e+10,sec,2026-10-21
 2023Q3,2023-09-30,FY2023 FY,operating_cash_flow,2.1598e+10,sec,2026-10-21
@@ -846,6 +849,7 @@ period,period_end,fiscal_label,metric,value,source,fetched_at
 2024Q3,2024-09-28,FY2024 FY,capex,2908000000,sec,2026-10-21
 2024Q3,2024-09-28,FY2024 FY,cash,2.9943e+10,sec,2026-10-21
 2024Q3,2024-09-28,FY2024 FY,dividends_paid,3804000000,sec,2026-10-21
+2024Q3,2024-09-28,FY2024 FY,eps_diluted,0.97,sec,2026-10-21
 2024Q3,2024-09-28,FY2024 FY,equity,5.695e+10,sec,2026-10-21
 2024Q3,2024-09-28,FY2024 FY,net_income,1.4736e+10,sec,2026-10-21
 2024Q3,2024-09-28,FY2024 FY,operating_cash_flow,2.6811e+10,sec,2026-10-21
@@ -918,6 +922,7 @@ period,period_end,fiscal_label,metric,value,source,fetched_at
 2025Q3,2025-09-30,,diluted_shares,1.4863609e+10,yahoo,2026-10-21
 2025Q3,2025-09-27,FY2025 FY,dividends_paid,3862000000,sec,2026-10-21
 2025Q3,2025-09-30,,dividends_paid,3862000000,yahoo,2026-10-21
+2025Q3,2025-09-27,FY2025 FY,eps_diluted,1.84,sec,2026-10-21
 2025Q3,2025-09-30,,eps_diluted,1.85,yahoo,2026-10-21
 2025Q3,2025-09-27,FY2025 FY,equity,7.3733e+10,sec,2026-10-21
 2025Q3,2025-09-30,,equity,7.3733e+10,yahoo,2026-10-21

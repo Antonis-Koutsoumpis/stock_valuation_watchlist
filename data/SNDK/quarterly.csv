@@ -68,6 +68,7 @@ period,period_end,fiscal_label,metric,value,source,fetched_at
 2025Q2,2025-06-27,FY2025 FY,cash,1481000000,sec,2026-10-21
 2025Q2,2025-06-30,,cash,1481000000,yahoo,2026-10-21
 2025Q2,2025-06-30,,diluted_shares,145000000,yahoo,2026-10-21
+2025Q2,2025-06-27,FY2025 FY,eps_diluted,-0.17,sec,2026-10-21
 2025Q2,2025-06-30,,eps_diluted,-0.16,yahoo,2026-10-21
 2025Q2,2025-06-27,FY2025 FY,equity,9216000000,sec,2026-10-21
 2025Q2,2025-06-30,,equity,9216000000,yahoo,2026-10-21
@@ -170,6 +171,7 @@ period,period_end,fiscal_label,metric,value,source,fetched_at
 2026Q2,2026-07-03,FY2026 FY,cash,4762000000,sec,2026-10-21
 2026Q2,2026-06-30,,cash,4762000000,yahoo,2026-10-21
 2026Q2,2026-06-30,,diluted_shares,157000000,yahoo,2026-10-21
+2026Q2,2026-07-03,FY2026 FY,eps_diluted,44.83,sec,2026-10-21
 2026Q2,2026-06-30,,eps_diluted,43.97,yahoo,2026-10-21
 2026Q2,2026-07-03,FY2026 FY,equity,1.5736e+10,sec,2026-10-21
 2026Q2,2026-06-30,,equity,1.5736e+10,yahoo,2026-10-21

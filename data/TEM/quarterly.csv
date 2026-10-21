@@ -68,6 +68,7 @@ period,period_end,fiscal_label,metric,value,source,fetched_at
 2024Q4,2024-12-31,FY2024 FY,capex,7962000,sec,2026-10-21
 2024Q4,2024-12-31,FY2024 FY,cash,340954000,sec,2026-10-21
 2024Q4,2024-12-31,FY2024 FY,dividends_paid,0,sec,2026-10-21
+2024Q4,2024-12-31,FY2024 FY,eps_diluted,2.56,sec,2026-10-21
 2024Q4,2024-12-31,FY2024 FY,equity,56339000,sec,2026-10-21
 2024Q4,2024-12-31,FY2024 FY,net_income,-13014000,sec,2026-10-21
 2024Q4,2024-12-31,FY2024 FY,operating_cash_flow,-39251000,sec,2026-10-21
@@ -144,6 +145,7 @@ period,period_end,fiscal_label,metric,value,source,fetched_at
 2025Q4,2025-12-31,,cash,604787000,yahoo,2026-10-21
 2025Q4,2025-12-31,FY2025 FY,dividends_paid,0,sec,2026-10-21
 2025Q4,2025-12-31,,dividends_paid,0,yahoo,2026-10-21
+2025Q4,2025-12-31,FY2025 FY,eps_diluted,-0.3,sec,2026-10-21
 2025Q4,2025-12-31,FY2025 FY,equity,491326000,sec,2026-10-21
 2025Q4,2025-12-31,,equity,491326000,yahoo,2026-10-21
 2025Q4,2025-12-31,FY2025 FY,net_income,-54166000,sec,2026-10-21
