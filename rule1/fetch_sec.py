@@ -40,6 +40,19 @@ INSTANT_CONCEPTS = {
 }
 # Not additive across quarters, so never derived by subtracting year-to-date values.
 NON_ADDITIVE = {"eps_diluted", "diluted_shares"}
+# Restated to today's share count after a stock split (e.g. Amazon's 20-for-1 in 2022).
+PER_SHARE = {"eps_diluted"}
+SHARE_COUNTS = {"diluted_shares", "shares_outstanding"}
+
+
+def _split_adjust(df: pd.DataFrame, metric: str, splits: pd.Series | None) -> pd.DataFrame:
+    """A value filed before a split is in old shares; values filed after it are already restated."""
+    if splits is None or splits.empty or (metric not in PER_SHARE and metric not in SHARE_COUNTS):
+        return df
+    factor = df["filed"].map(lambda filed: float(splits[splits.index > filed].prod()))
+    df = df.copy()
+    df["val"] = df["val"] / factor if metric in PER_SHARE else df["val"] * factor
+    return df
 
 
 def fetch_companyfacts(cik: str) -> dict:
@@ -82,7 +95,8 @@ def _duration_series(df: pd.DataFrame, additive: bool) -> tuple[dict, dict]:
     df = df.sort_values("filed").drop_duplicates(["start", "end"], keep="last")
     days = (df["end"] - df["start"]).dt.days
     quarterly = {r.end: r.val for r in df[(days >= 80) & (days <= 100)].itertuples()}
-    annual = {r.end: r.val for r in df[(days >= 350) & (days <= 380)].itertuples()}
+    is_10k = df["form"].str.startswith("10-K") & (df["fp"] == "FY")
+    annual = {r.end: r.val for r in df[(days >= 350) & (days <= 380) & is_10k].itertuples()}
     if additive:
         for _, chain in df.groupby("start"):
             chain = chain.sort_values("end")
@@ -106,7 +120,8 @@ def _rows(values: dict, labeller, metric, fiscal, fetched_at) -> list[dict]:
     } for end, val in values.items()]
 
 
-def parse_companyfacts(data: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
+def parse_companyfacts(data: dict, splits: pd.Series | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """`splits`: split ratios indexed by date (e.g. 20.0 on 2022-06-06)."""
     fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     q_rows, a_rows, fiscal, year_ends = [], [], {}, set()
 
@@ -116,6 +131,7 @@ def parse_companyfacts(data: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
             df = _facts(data, concept)
             if df.empty or "start" not in df:
                 continue
+            df = _split_adjust(df, metric, splits)
             fiscal.update({k: v for k, v in _fiscal_labels(df).items() if k not in fiscal})
             q, a = _duration_series(df, metric not in NON_ADDITIVE)
             for end, v in q.items():
@@ -133,6 +149,7 @@ def parse_companyfacts(data: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
             df = _facts(data, concept)
             if df.empty:
                 continue
+            df = _split_adjust(df, metric, splits)
             fiscal.update({k: v for k, v in _fiscal_labels(df).items() if k not in fiscal})
             df = df.sort_values("filed").drop_duplicates("end", keep="last")
             for r in df.itertuples():
@@ -160,5 +177,5 @@ def parse_companyfacts(data: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
     return pd.DataFrame(q_rows, columns=STATEMENT_COLUMNS), pd.DataFrame(a_rows, columns=STATEMENT_COLUMNS)
 
 
-def fetch_statements(cik: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    return parse_companyfacts(fetch_companyfacts(cik))
+def fetch_statements(cik: str, splits: pd.Series | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    return parse_companyfacts(fetch_companyfacts(cik), splits)

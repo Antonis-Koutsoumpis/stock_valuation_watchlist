@@ -34,12 +34,13 @@ def update_stock(row) -> None:
     quarterly, annual = fetch_yahoo.fetch_statements(row.yahoo_symbol)
     if row.sec_cik:
         try:
-            sec_q, sec_a = fetch_sec.fetch_statements(row.sec_cik)
+            splits = fetch_yahoo.fetch_splits(row.yahoo_symbol)
+            sec_q, sec_a = fetch_sec.fetch_statements(row.sec_cik, splits)
             quarterly, annual = pd.concat([quarterly, sec_q]), pd.concat([annual, sec_a])
         except Exception as exc:  # Yahoo data is still saved if the SEC is down
             print(f"{row.ticker}: SEC fetch failed: {exc}")
-    q = merge_statements(folder / "quarterly.csv", quarterly)
-    a = merge_statements(folder / "annual.csv", annual)
+    q = merge_statements(folder / "quarterly.csv", quarterly, replace_sources={"sec"})
+    a = merge_statements(folder / "annual.csv", annual, replace_sources={"sec"})
     print(f"{row.ticker}: {q['period'].nunique()} quarters, {a['period'].nunique()} years stored")
 
 

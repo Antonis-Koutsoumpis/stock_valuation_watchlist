@@ -183,3 +183,29 @@ def test_screener_and_filters():
     cond = pd.DataFrame([{"metric": "ROIC (TTM)", "operator": ">", "value": 10},
                          {"metric": "BVPS", "operator": ">", "value": 10}])
     assert list(screener.apply_filters(table, cond).index) == ["A"]
+
+
+def test_sec_split_adjustment():
+    eps = [
+        _fact("2019-01-01", "2019-12-31", 23.0, "2020-01-31", fy=2019, fp="FY", form="10-K"),
+        # Filed after the 20-for-1 split: already restated.
+        _fact("2021-01-01", "2021-12-31", 3.24, "2023-02-03", fy=2022, fp="FY", form="10-K"),
+    ]
+    shares = [_fact(None, "2019-12-31", 500, "2020-01-31", fp="FY", form="10-K")]
+    data = {"facts": {"us-gaap": {"EarningsPerShareDiluted": {"units": {"USD/shares": eps}},
+                                  "CommonStockSharesOutstanding": {"units": {"shares": shares}}}}}
+    splits = pd.Series([20.0], index=pd.to_datetime(["2022-06-06"]))
+    _, a = fetch_sec.parse_companyfacts(data, splits)
+    vals = a.set_index(["period", "metric"])["value"].to_dict()
+    assert vals[("2019", "eps_diluted")] == pytest.approx(1.15)
+    assert vals[("2021", "eps_diluted")] == pytest.approx(3.24)
+    assert vals[("2019", "shares_outstanding")] == 10000
+
+
+def test_sec_rows_are_replaced_by_a_new_full_fetch(tmp_path):
+    path = tmp_path / "annual.csv"
+    row = lambda p, v, src: {"period": p, "period_end": "", "fiscal_label": "", "metric": "fcf",
+                             "value": v, "source": src, "fetched_at": ""}
+    store.merge_statements(path, pd.DataFrame([row("2026", -1.0, "sec"), row("2020", 5.0, "yahoo")]))
+    merged = store.merge_statements(path, pd.DataFrame([row("2025", 2.0, "sec")]), replace_sources={"sec"})
+    assert sorted(zip(merged["period"], merged["source"])) == [("2020", "yahoo"), ("2025", "sec")]

@@ -38,13 +38,18 @@ def merge_daily(path: Path, new: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
-def merge_statements(path: Path, new: pd.DataFrame) -> pd.DataFrame:
+def merge_statements(path: Path, new: pd.DataFrame, replace_sources: set[str] = frozenset()) -> pd.DataFrame:
     """Merge long statement rows. A newer fetch of the same key replaces the value
-    (restatements); keys missing from the new fetch are kept."""
+    (restatements); keys missing from the new fetch are kept, except for sources in
+    `replace_sources` that always deliver their full history (the SEC), whose old rows
+    are replaced by the new fetch."""
     old = read_csv(path, dtype={"period": str, "fiscal_label": str})
     if new.empty:
         return old
     new = new.reindex(columns=STATEMENT_COLUMNS)
+    replaced = set(replace_sources) & set(new["source"])
+    if replaced and not old.empty:
+        old = old[~old["source"].isin(replaced)]
     merged = new if old.empty else pd.concat([old, new], ignore_index=True)
     merged = merged.dropna(subset=["value"])
     merged = merged.drop_duplicates(subset=STATEMENT_KEYS, keep="last")

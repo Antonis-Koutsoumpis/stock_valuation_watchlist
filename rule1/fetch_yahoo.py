@@ -49,6 +49,14 @@ def fetch_prices(symbol: str, full_history: bool) -> pd.DataFrame:
     return out
 
 
+def fetch_splits(symbol: str) -> pd.Series:
+    splits = yf.Ticker(symbol).splits
+    if splits is None or splits.empty:
+        return pd.Series(dtype=float)
+    splits.index = splits.index.tz_localize(None).normalize()
+    return splits[splits > 0]
+
+
 def fetch_snapshot(symbol: str, last_trading_day) -> pd.DataFrame:
     info = yf.Ticker(symbol).info or {}
     row = {col: info.get(key) for col, key in SNAPSHOT_KEYS.items()}
