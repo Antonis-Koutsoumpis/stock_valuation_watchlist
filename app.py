@@ -144,6 +144,13 @@ def stock_page():
     selected = st.sidebar.multiselect(
         "Variables", available, default=["close"], format_func=lambda m: GRAPH[m].label, max_selections=4,
         help="Up to 4, each with its own axis. Hover the ? next to each name under the graph to see what it means.")
+    index_rows = watchlist[watchlist["type"] == "index"]
+    index_names = dict(zip(index_rows["ticker"], index_rows["name"]))
+    shown_indices = st.sidebar.multiselect(
+        "Show an index on the graph", list(index_names), format_func=lambda t: index_names[t],
+        help="Draws the index as a dashed line with the Price, scaled so it starts at the stock's price on the first "
+             "day of the time range. Both then move by the same % as the real index and stock, so you see at a "
+             "glance which grew more. The legend shows the real % change of each in the time range.")
 
     first, last_day = daily_df.index.min().date(), daily_df.index.max().date()
     default_start = max(first, (pd.Timestamp(last_day) - pd.DateOffset(years=5)).date())
@@ -236,27 +243,35 @@ def stock_page():
             if quarterly_mode:
                 s = s.groupby(s.index.to_period("Q")).mean()
                 s.index = pd.DatetimeIndex([quarter_mid(str(p)) for p in s.index])
+        return s  # the full history, so 10y and All on the graph show older values too
+
+    def in_range(s: pd.Series) -> pd.Series:
         return s[(s.index >= start) & (s.index <= end + pd.Timedelta(days=1))]
 
+    overlays = list(dict.fromkeys([*shown_indices, *compare]))
     fig = go.Figure()
     axis_slots = [("left", 0.0), ("right", 1.0), ("left", 0.06), ("right", 0.94)]
     price_axis = None
     first_dates = []
     for i, metric in enumerate(selected):
         meta, color = GRAPH[metric], COLORS[i]
+        name = meta.label
         s = series_for(metric)
-        if not s.empty:
-            first_dates.append(s.index.min())
+        if not in_range(s).empty:
+            first_dates.append(in_range(s).index.min())
         axis = "y" if i == 0 else f"y{i + 1}"
         if metric == "close":
             price_axis = axis
+            own = in_range(daily_df["close"].dropna())
+            if overlays and len(own) > 1:
+                name = f"{meta.label} ({own.iloc[-1] / own.iloc[0] - 1:+.0%} in the time range)"
         if metric == "close" and quarterly_mode:
             fig.add_trace(go.Bar(
-                x=s.index, y=s.values, name=f"{meta.label} (quarter average)", yaxis=axis, width=QUARTER_BAR_WIDTH,
+                x=s.index, y=s.values, name=f"{name} (quarter average)", yaxis=axis, width=QUARTER_BAR_WIDTH,
                 marker_color=color, opacity=0.65,
                 text=[fmt(v) for v in s.values] if bar_values else None, textposition="outside"))
         else:
-            fig.add_trace(go.Scatter(x=s.index, y=s.values, name=meta.label, yaxis=axis,
+            fig.add_trace(go.Scatter(x=s.index, y=s.values, name=name, yaxis=axis,
                                      mode="lines+markers" if quarterly_mode or len(s) < 30 else "lines",
                                      line=dict(color=color),
                                      text=[fmt(v) for v in s.values] if bar_values and quarterly_mode else None,
@@ -264,12 +279,12 @@ def stock_page():
             if bar_values and quarterly_mode:
                 fig.data[-1].mode = "lines+markers+text"
         for kind in trends:
-            fitted, label = charts.trend(s, kind, degree)
+            fitted, label = charts.trend(in_range(s), kind, degree)
             if not fitted.empty:
                 fig.add_trace(go.Scatter(x=fitted.index, y=fitted.values, name=f"{meta.label}: {label}", yaxis=axis,
                                          mode="lines", line=dict(color=color, dash="dash", width=1.5)))
         for years in averages:
-            avg = charts.trailing_average(s, years)
+            avg = charts.trailing_average(in_range(s), years)
             if avg:
                 a_start, a_end, value = avg
                 fig.add_trace(go.Scatter(
@@ -284,30 +299,33 @@ def stock_page():
         fig.update_layout({"yaxis" if i == 0 else f"yaxis{i + 1}": spec})
 
     if show_dcf and not dcf_df.empty and price_axis:
-        add_boxes(fig, dcf_df, price_axis, start, end, "DCF sites", DCF_FILL, DCF_LINE)
+        add_boxes(fig, dcf_df, price_axis, pd.Timestamp.min, end, "DCF sites", DCF_FILL, DCF_LINE)
     if show_calc and not calc_hist.empty and price_axis:
-        add_boxes(fig, calc_hist, price_axis, start, end, "Calculated value", CALC_FILL, CALC_LINE)
+        add_boxes(fig, calc_hist, price_axis, pd.Timestamp.min, end, "Calculated value", CALC_FILL, CALC_LINE)
 
-    if compare and price_axis:
-        # Compared stocks and indices on the price axis, scaled to start at this stock's price.
-        own = daily_df["close"].dropna()
-        own = own[(own.index >= start) & (own.index <= end + pd.Timedelta(days=1))]
-        for j, t in enumerate(compare):
+    if overlays and not price_axis:
+        st.info("Add Price to the variables to see the index or compared stocks on the graph.")
+    if overlays and price_axis:
+        # Scaled so each starts at this stock's price on the first day of the time range.
+        own = in_range(daily_df["close"].dropna())
+        for j, t in enumerate(overlays):
             other = load_close(t)
-            other = other[(other.index >= start) & (other.index <= end + pd.Timedelta(days=1))]
+            other = other[other.index >= daily_df["close"].first_valid_index()]  # not before the stock's history
             common = own.index.intersection(other.index)
             if common.empty:
                 continue
             first_day = common.min()
-            scaled = other[other.index >= first_day] * own[first_day] / other[first_day]
-            change = scaled.iloc[-1] / scaled.iloc[0] - 1
+            factor = own[first_day] / other[first_day]
+            shown = in_range(other[other.index >= first_day])
+            change = shown.iloc[-1] / shown.iloc[0] - 1
             if quarterly_mode:
-                scaled = scaled.groupby(scaled.index.to_period("Q")).mean()
-                scaled.index = pd.DatetimeIndex([quarter_mid(str(p)) for p in scaled.index])
+                other = other.groupby(other.index.to_period("Q")).mean()
+                other.index = pd.DatetimeIndex([quarter_mid(str(p)) for p in other.index])
             fig.add_trace(go.Scatter(
-                x=scaled.index, y=scaled.values, yaxis=price_axis, mode="lines",
-                name=f"{t} · {names[t]} (scaled, {change:+.0%})",
-                line=dict(color=COMPARE_COLORS[j % len(COMPARE_COLORS)], width=1.5, dash="dash")))
+                x=other.index, y=other.values * factor, yaxis=price_axis, mode="lines", customdata=other.values,
+                name=f"{names[t]} (scaled to the stock on {first_day:%d %b %Y}; {change:+.0%} in the time range)",
+                hovertemplate=f"{names[t]}: %{{customdata:,.2f}} (scaled %{{y:,.2f}})<extra></extra>",
+                line=dict(color=COMPARE_COLORS[j % len(COMPARE_COLORS)], width=1.8, dash="dash")))
 
     # The graph starts at the first date with data for the selected variables.
     x_start = max(start, min(first_dates) - pd.Timedelta(days=45)) if first_dates else start
