@@ -1,0 +1,31 @@
+name: Check ticker list
+
+on:
+  push:
+    branches: [main]
+    paths: ["config/ticker_reference.csv"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m rule1.check_symbols
+      - name: Save results
+        run: |
+          git config user.name "watchlist-bot"
+          git config user.email "watchlist-bot@users.noreply.github.com"
+          git add config/ticker_reference.csv
+          git diff --cached --quiet || git commit -m "Check ticker list against Yahoo"
+          git pull --rebase
+          git push

@@ -31,11 +31,20 @@ def update_stock(row) -> None:
     merge_daily(daily_path, prices.join(snapshot, how="left"))
     print(f"{row.ticker}: {len(prices)} price rows, snapshot for {prices.index.max():%Y-%m-%d}")
 
+    if getattr(row, "type", "stock") == "index":
+        return  # an index has prices only, no financial statements
+
     quarterly, annual = fetch_yahoo.fetch_statements(row.yahoo_symbol)
-    if row.sec_cik:
+    cik = row.sec_cik
+    if not cik and row.currency == "USD":
+        try:
+            cik = fetch_sec.lookup_cik(row.ticker) or ""
+        except Exception as exc:
+            print(f"{row.ticker}: SEC lookup failed: {exc}")
+    if cik:
         try:
             splits = fetch_yahoo.fetch_splits(row.yahoo_symbol)
-            sec_q, sec_a = fetch_sec.fetch_statements(row.sec_cik, splits)
+            sec_q, sec_a = fetch_sec.fetch_statements(cik, splits)
             quarterly, annual = pd.concat([quarterly, sec_q]), pd.concat([annual, sec_a])
         except Exception as exc:  # Yahoo data is still saved if the SEC is down
             print(f"{row.ticker}: SEC fetch failed: {exc}")

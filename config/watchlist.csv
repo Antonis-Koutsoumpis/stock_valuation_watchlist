@@ -1,3 +1,5 @@
-ticker,name,yahoo_symbol,currency,sec_cik
-AMZN,Amazon.com Inc.,AMZN,USD,0001018724
-FTK,flatexDEGIRO AG,FTK.DE,EUR,
+ticker,name,yahoo_symbol,currency,sec_cik,type
+AMZN,Amazon.com Inc.,AMZN,USD,0001018724,stock
+FTK,flatexDEGIRO AG,FTK.DE,EUR,,stock
+SPX,S&P 500,^GSPC,USD,,index
+NDX,Nasdaq-100,^NDX,USD,,index

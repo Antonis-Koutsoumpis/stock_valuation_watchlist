@@ -21,7 +21,8 @@ shows it.
 
 | Path | What it holds |
 | --- | --- |
-| `config/watchlist.csv` | The stocks. Add a row to add a stock (US stocks: add the SEC CIK) |
+| `config/watchlist.csv` | The stocks on the watchlist. Add a row to add a stock (US stocks find their SEC data automatically) |
+| `config/ticker_reference.csv` | All planned stocks and indices. Use the `ticker` column in the manual-entry sheet; `yahoo_check` shows whether Yahoo knows the symbol |
 | `data/<TICKER>/daily.csv` | Daily close, volume, and Yahoo's daily snapshot (`*_yahoo` columns) |
 | `data/<TICKER>/quarterly.csv` | Quarterly statement values, one row per period, metric and source |
 | `data/<TICKER>/annual.csv` | Fiscal-year statement values |

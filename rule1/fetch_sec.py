@@ -11,6 +11,8 @@ from .periods import quarter_label, year_label
 from .store import STATEMENT_COLUMNS
 
 URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
+TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
+_cik_cache: dict[str, str] = {}
 
 # Our metric -> us-gaap concepts in priority order. Companies switch concepts over
 # the years (e.g. SalesRevenueNet before 2018), so lower-priority concepts fill gaps.
@@ -55,12 +57,24 @@ def _split_adjust(df: pd.DataFrame, metric: str, splits: pd.Series | None) -> pd
     return df
 
 
-def fetch_companyfacts(cik: str) -> dict:
+def _headers() -> dict:
     contact = os.environ.get("SEC_CONTACT_EMAIL")
     if not contact:
         raise RuntimeError("Set SEC_CONTACT_EMAIL; the SEC requires a contact email.")
-    resp = requests.get(URL.format(cik=cik.zfill(10)),
-                        headers={"User-Agent": f"rule1-watchlist {contact}"}, timeout=60)
+    return {"User-Agent": f"rule1-watchlist {contact}"}
+
+
+def lookup_cik(ticker: str) -> str | None:
+    """The SEC's company number for a US ticker (e.g. AMZN -> 0001018724), or None."""
+    if not _cik_cache:
+        resp = requests.get(TICKERS_URL, headers=_headers(), timeout=60)
+        resp.raise_for_status()
+        _cik_cache.update({r["ticker"].upper(): str(r["cik_str"]).zfill(10) for r in resp.json().values()})
+    return _cik_cache.get(ticker.upper())
+
+
+def fetch_companyfacts(cik: str) -> dict:
+    resp = requests.get(URL.format(cik=cik.zfill(10)), headers=_headers(), timeout=60)
     resp.raise_for_status()
     return resp.json()
 
