@@ -59,8 +59,8 @@ DAILY = {
 QUARTERLY = {
     "revenue": Metric("Revenue (quarter)", "Total sales in that quarter.", "Quarterly"),
     "revenue_ttm": Metric("Revenue (TTM)", "Total sales over the last 4 quarters (TTM = trailing 12 months).", "Quarterly"),
-    "eps_diluted": Metric("EPS (quarter)", "Profit per share in that quarter.", "Quarterly"),
-    "eps_diluted_ttm": Metric("EPS (TTM)", "Profit per share over the last 4 quarters.", "Quarterly"),
+    "eps_diluted": Metric("EPS (diluted, quarter)", "Profit per share in that quarter, diluted (counts shares from options and convertibles too).", "Quarterly"),
+    "eps_diluted_ttm": Metric("EPS (diluted, TTM)", "Profit per share over the last 4 quarters, diluted.", "Quarterly"),
     "fcf": Metric(
         "Free cash flow (quarter)",
         "Cash from the business minus money spent on equipment and buildings (Operating Cash Flow − CapEx). "
@@ -97,7 +97,7 @@ YEARLY = {
     "roic": Metric("ROIC", "After-tax operating profit of the year ÷ (debt + equity). Rule #1 looks for 10% or more.", "Yearly", percent=True),
     "bvps": Metric("BVPS", "Book value per share at year end.", "Yearly"),
     "revenue": Metric("Revenue", "Total sales in the year.", "Yearly"),
-    "eps_diluted": Metric("EPS", "Profit per share in the year.", "Yearly"),
+    "eps_diluted": Metric("EPS (diluted)", "Profit per share in the year, diluted (counts shares from options and convertibles too).", "Yearly"),
     "fcf": Metric("Free Cash Flow", "Operating Cash Flow − CapEx for the year.", "Yearly"),
     "net_debt_fcf": Metric("Net Debt / FCF", "Years of free cash flow needed to pay off the debt. Rule #1 looks for 3 or less.", "Yearly"),
     "total_debt": Metric("Debt", "Borrowed money at year end.", "Yearly"),

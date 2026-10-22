@@ -291,7 +291,7 @@ def test_valuation_scenarios_and_history():
     quarterly = pd.DataFrame({"period_end": pd.to_datetime(["2019-12-31"]), "fcf_ttm": [2.0], "net_income_ttm": [4.0]},
                              index=["2019Q4"])
     v = valuation.value(daily, quarterly, annual)
-    assert v["candidates"] == {"EPS 5y": 0.08, "FCF 5y": 0.12, "Analysts 5y": 0.10}
+    assert v["candidates"] == {"EPS (diluted) 5y": 0.08, "FCF 5y": 0.12, "Analysts 5y": 0.10}
     assert v["growth"]["Conservative"] < v["growth"]["Middle"] < v["growth"]["Optimistic"]
     assert v["inputs"]["eps"] == 5.0 and v["inputs"]["fcf_per_share"] == 2.5
     assert v["range"]["low"] < v["range"]["middle"] < v["range"]["high"]

@@ -12,7 +12,7 @@ from .glossary import CAGR_HELP, DAILY, QUARTERLY
 
 SUMMARY_PATH = Path(__file__).resolve().parent.parent / "data" / "_summary" / "screener.csv"
 YEARS = range(1, 11)
-GROWTH = {"bvps": "BVPS", "eps_diluted": "EPS", "revenue": "Revenue", "fcf": "Free Cash Flow"}
+GROWTH = {"bvps": "BVPS", "eps_diluted": "EPS (diluted)", "revenue": "Revenue", "fcf": "Free Cash Flow"}
 OPERATORS = {">": operator.gt, ">=": operator.ge, "<": operator.lt, "<=": operator.le, "=": operator.eq}
 
 
@@ -57,7 +57,7 @@ PERIODS = ["Latest", *[f"{n}y" for n in YEARS]]
 DEFAULT_CONDITIONS = pd.DataFrame([
     {"metric": "ROIC", "period": "10y", "operator": ">=", "value": 10.0},
     {"metric": "BVPS growth", "period": "10y", "operator": ">=", "value": 10.0},
-    {"metric": "EPS growth", "period": "10y", "operator": ">=", "value": 10.0},
+    {"metric": "EPS (diluted) growth", "period": "10y", "operator": ">=", "value": 10.0},
     {"metric": "Revenue growth", "period": "10y", "operator": ">=", "value": 10.0},
     {"metric": "Free Cash Flow growth", "period": "10y", "operator": ">=", "value": 10.0},
 ])

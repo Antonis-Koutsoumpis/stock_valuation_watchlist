@@ -98,7 +98,7 @@ def quarter_mid(label: str) -> pd.Timestamp:
 
 GREEN = "background-color: rgba(76, 175, 80, 0.25)"
 ROW_LABELS = {"roic": "ROIC (average)", "net_debt_fcf": "Net Debt / FCF (average)", "bvps": "BVPS growth",
-              "revenue": "Revenue growth", "eps_diluted": "EPS growth", "fcf": "Free Cash Flow growth"}
+              "revenue": "Revenue growth", "eps_diluted": "EPS (diluted) growth", "fcf": "Free Cash Flow growth"}
 
 
 def rule1_ok(metric: str, v) -> bool:
@@ -459,7 +459,7 @@ def calculated_value_tab(calc: dict, currency: str, horizon: int, discount: floa
                      use_container_width=True)
         st.markdown("**Starting values**")
         st.dataframe(pd.Series({
-            "Price": fmt(inp["price"]), "EPS (last 12 months)": fmt(inp["eps"]),
+            "Price": fmt(inp["price"]), "EPS (diluted, last 12 months)": fmt(inp["eps"]),
             "FCF per share (last 12 months)": fmt(inp["fcf_per_share"]),
             "Average P/E (10 years)": fmt(inp["avg_pe"]),
             "Growth years": str(horizon), "Discount rate": fmt(discount, percent=True)}, name="value"),

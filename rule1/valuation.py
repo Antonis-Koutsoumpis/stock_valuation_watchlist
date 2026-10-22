@@ -17,10 +17,10 @@ SCENARIOS = ["Conservative", "Middle", "Optimistic"]
 METHOD_HELP = {
     "FCF DCF": "Free cash flow per share grows at the growth rate for the growth years, then at 3% a year "
                "forever (the terminal value). Every year is discounted back to today at the discount rate.",
-    "EPS DCF": "The same as FCF DCF, with earnings per share.",
+    "EPS DCF": "The same as FCF DCF, with diluted earnings per share.",
     "FCF exit multiple": "Free cash flow per share grows for the growth years; the share is then sold at the "
                          "10-year average P/E (between 8 and 25). Cash flows and sale are discounted to today.",
-    "EPS exit multiple": "The same as FCF exit multiple, with earnings per share.",
+    "EPS exit multiple": "The same as FCF exit multiple, with diluted earnings per share.",
     "Rule #1 Sticker Price": "Phil Town: EPS after the growth years × a future P/E (2 × the growth rate, at most the "
                              "10-year average P/E), discounted at 15% a year. The Margin of Safety price is half.",
     "Graham formula": "Benjamin Graham: EPS × (8.5 + 2 × growth rate in %), using a 4.4% bond yield.",
@@ -63,7 +63,7 @@ def growth_candidates(daily: pd.DataFrame, annual: pd.DataFrame) -> dict:
     """Growth rates the scenarios choose from: historical yearly growth (CAGR) and the
     analysts' 5-year estimate (Yahoo's P/E ÷ PEG)."""
     out = {}
-    for key, label in [("eps_diluted", "EPS"), ("fcf", "FCF"), ("bvps", "BVPS"), ("revenue", "Revenue")]:
+    for key, label in [("eps_diluted", "EPS (diluted)"), ("fcf", "FCF"), ("bvps", "BVPS"), ("revenue", "Revenue")]:
         found = {n: _last(annual, f"{key}_cagr_{n}y") for n in range(10, 0, -1)}
         found = {n: v for n, v in found.items() if not np.isnan(v)}
         # 5 and 10 years; a young listing uses its longest history instead
