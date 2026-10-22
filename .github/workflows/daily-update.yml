@@ -11,6 +11,11 @@ on:
 permissions:
   contents: write
 
+# One run at a time: overlapping runs both commit data and the second push fails.
+concurrency:
+  group: daily-update
+  cancel-in-progress: false
+
 jobs:
   update:
     runs-on: ubuntu-latest
