@@ -47,7 +47,12 @@ def load_close(ticker: str) -> pd.Series:
 
 @st.cache_data(ttl=600)
 def load_stock(ticker: str):
-    return build.load_stock(load_watchlist().set_index("ticker").loc[ticker], load_manual())
+    """(daily, quarterly, yearly, dcf); "SPX real" = the S&P 500 page in today's dollars."""
+    daily, q, a, dcf = build.load_stock(load_watchlist().set_index("ticker").loc[ticker.removesuffix(REAL)],
+                                        load_manual())
+    if ticker.endswith(REAL):
+        daily = daily[["close"]].assign(close=load_close(ticker)).dropna()
+    return daily, q, a, dcf
 
 
 @st.cache_data(show_spinner="Calculating the value…")
@@ -131,9 +136,16 @@ def show_table(df: pd.DataFrame, glossary: dict):
 def stock_page():
     watchlist = load_watchlist()
     options = [f"{r.ticker} · {r.name}" for r in watchlist.itertuples()]
-    choice = st.sidebar.selectbox("Find a stock", options, index=0, placeholder="Type a name or ticker")
+    if inflation.CPI_PATH.exists():
+        options += [f"{r.ticker}{REAL} · {r.name} (inflation-adjusted)"
+                    for r in watchlist[watchlist["type"] == "index"].itertuples()]
+    choice = st.sidebar.selectbox("Find a stock", options, index=0, placeholder="Type a name or ticker",
+                                  help="Indices are also available adjusted for inflation (in today's dollars, "
+                                       "using US consumer prices from FRED).")
     ticker = choice.split(" · ")[0]
-    stock = watchlist.set_index("ticker").loc[ticker]
+    stock = watchlist.set_index("ticker").loc[ticker.removesuffix(REAL)].copy()
+    if ticker.endswith(REAL):
+        stock["name"] = f"{stock['name']} (inflation-adjusted)"
     daily_df, q_df, a_df, dcf_df = load_stock(ticker)
 
     st.title(f"{stock['name']} ({ticker})")
