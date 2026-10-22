@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import build, fetch_sec, fetch_yahoo, manual, screener
+from . import build, fetch_sec, fetch_yahoo, inflation, manual, screener
 from .store import DATA_DIR, merge_daily, merge_statements, stock_dir
 
 WATCHLIST = Path(__file__).resolve().parent.parent / "config" / "watchlist.csv"
@@ -106,6 +106,10 @@ def main(tickers: list[str]) -> int:
         time.sleep(PAUSE_SECONDS)
     try:
         update_fx({p for p in map(fx_pair, watchlist.itertuples()) if p})
+    except Exception:
+        traceback.print_exc()
+    try:
+        retry(inflation.update_cpi)
     except Exception:
         traceback.print_exc()
     man = manual.load()

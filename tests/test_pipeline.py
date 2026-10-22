@@ -308,3 +308,11 @@ def test_more_methods():
     assert valuation.lynch(2.0, 0.40) == 50.0  # growth capped at 25
     assert valuation.graham_number(2.0, 10.0) == pytest.approx(np.sqrt(450))
     assert valuation.exit_multiple(1.0, 0.0, 0.0, 10, 2) == pytest.approx(12.0)
+
+
+def test_inflation_adjusted_prices():
+    from rule1 import inflation
+    cpi = pd.Series([100.0, 110.0], index=pd.to_datetime(["2020-01-01", "2020-02-01"]))
+    prices = pd.Series([10.0, 10.0, 10.0], index=pd.to_datetime(["2020-01-15", "2020-02-15", "2020-03-15"]))
+    real = inflation.real(prices, cpi)
+    assert real.tolist() == pytest.approx([11.0, 10.0, 10.0])

@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from rule1 import build, charts, manual, metrics, screener, valuation
+from rule1 import build, charts, inflation, manual, metrics, screener, valuation
 from rule1.glossary import CAGR_HELP, DAILY, DCF, GRAPH, QUARTERLY, YEARLY, Metric
 from rule1.periods import quarter_end, quarter_start
 from rule1.store import DATA_DIR, read_csv
@@ -19,6 +19,8 @@ COMPARE_COLORS = ["#2ca02c", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17bec
 CALC_FILL = "rgba(255, 140, 0, 0.18)"
 CALC_LINE = "rgba(230, 120, 0, 0.95)"
 PERIOD_YEARS = {"1y": 1, "3y": 3, "5y": 5, "10y": 10, "20y": 20, "All": None, "Custom": None}
+REAL = " real"
+YEAR_BAR_WIDTH = 300 * 24 * 3600 * 1000  # ms
 QUARTER_BAR_WIDTH = 75 * 24 * 3600 * 1000  # ms
 
 
@@ -36,8 +38,11 @@ def load_manual():
 
 @st.cache_data(ttl=600)
 def load_close(ticker: str) -> pd.Series:
-    prices = read_csv(DATA_DIR / ticker / "daily.csv", index_col="date", parse_dates=["date"])
-    return prices["close"].dropna() if not prices.empty else pd.Series(dtype=float)
+    """Daily close; "SPX real" = the S&P 500 in today's dollars (adjusted for US inflation)."""
+    real = ticker.endswith(REAL)
+    prices = read_csv(DATA_DIR / ticker.removesuffix(REAL) / "daily.csv", index_col="date", parse_dates=["date"])
+    close = prices["close"].dropna() if not prices.empty else pd.Series(dtype=float)
+    return inflation.real(close, inflation.load_cpi()) if real else close
 
 
 @st.cache_data(ttl=600)
@@ -141,17 +146,23 @@ def stock_page():
     available = [m for m in GRAPH
                  if (m in daily_df and daily_df[m].notna().any())
                  or (m in q_df and q_df[m].notna().any())
+                 or (m in QUARTERLY and m.removesuffix("_ttm") in a_df and a_df[m.removesuffix("_ttm")].notna().any())
                  or (m in DCF and "close" in daily_df)]
     selected = st.sidebar.multiselect(
         "Variables", available, default=["close"], format_func=lambda m: GRAPH[m].label, max_selections=4,
         help="Up to 4, each with its own axis. Hover the ? next to each name under the graph to see what it means.")
     index_rows = watchlist[watchlist["type"] == "index"]
-    index_names = dict(zip(index_rows["ticker"], index_rows["name"]))
+    index_names = {}
+    for t, n in zip(index_rows["ticker"], index_rows["name"]):
+        index_names[t] = n
+        if inflation.CPI_PATH.exists():
+            index_names[f"{t}{REAL}"] = f"{n} (inflation-adjusted)"
     shown_indices = st.sidebar.multiselect(
         "Show an index on the graph", list(index_names), format_func=lambda t: index_names[t],
         help="Draws the index as a dashed line with the Price, scaled so it starts at the stock's price on the first "
-             "day of the time range. Both then move by the same % as the real index and stock, so you see at a "
-             "glance which grew more. The legend shows the real % change of each in the time range.")
+             "day of the time range. Both then move by the same % as the index and stock, so you see at a "
+             "glance which grew more. The legend shows the % change of each in the time range. "
+             "Inflation-adjusted: in today's dollars, using US consumer prices (CPI, monthly, from FRED).")
 
     first, last_day = daily_df.index.min().date(), daily_df.index.max().date()
     default_start = max(first, (pd.Timestamp(last_day) - pd.DateOffset(years=5)).date())
@@ -169,13 +180,14 @@ def stock_page():
         start = max(pd.Timestamp(first), end - pd.DateOffset(years=years)) if years else pd.Timestamp(first)
 
     log_scale = st.sidebar.radio("Scale", ["Raw", "Logarithmic"], horizontal=True) == "Logarithmic"
-    needs_quarterly = any(m in QUARTERLY or m in DCF for m in selected)
-    freq = st.sidebar.radio("Frequency", ["Daily", "Quarterly"], horizontal=True,
-                            index=1 if needs_quarterly else 0, disabled=needs_quarterly,
-                            help="Quarterly averages the daily values of each quarter and shows the price as bars. "
-                                 "Graphs with quarterly metrics are always quarterly.")
-    quarterly_mode = needs_quarterly or freq == "Quarterly"
-    bar_values = st.sidebar.toggle("Show values on bars", value=False, disabled=not quarterly_mode)
+    has_daily_metric = any(m in DAILY and m != "close" for m in selected)
+    has_bars = any(m in QUARTERLY for m in selected)
+    freq = st.sidebar.radio("Daily metrics (other than Price)", ["Daily", "Quarterly average"], horizontal=True,
+                            disabled=not has_daily_metric,
+                            help="Daily metrics such as P/E are lines. Quarterly average shows one point per quarter. "
+                                 "The price is always a daily line; quarterly metrics such as Revenue are bars.")
+    quarterly_mode = freq == "Quarterly average"
+    bar_values = st.sidebar.toggle("Show values on bars", value=False, disabled=not has_bars)
 
     trends = st.sidebar.multiselect(
         "Trend lines", charts.TRENDS,
@@ -184,7 +196,12 @@ def stock_page():
     degree = st.sidebar.slider("Polynomial degree", 2, 5, 2) if "Polynomial" in trends else 2
     averages = st.sidebar.multiselect(
         "Average lines", [5, 10], format_func=lambda y: f"{y}-year average",
-        help="Dotted line at the average of each variable over the last 5 or 10 years of the time range.")
+        help="Dotted line at the average over the last 5 or 10 years of the time range (pick a time range of at "
+             "least that long).")
+    default_avg = [m for m in selected if m == "trailing_pe"] or selected[:1]
+    average_for = st.sidebar.multiselect(
+        "Average lines for", selected, default=default_avg, format_func=lambda m: GRAPH[m].label,
+        disabled=not averages, help="Which variables get the average lines.") if averages else []
     show_dcf = st.sidebar.checkbox(
         "Show DCF range boxes (from the sites)", value=False, disabled=dcf_df.empty or "close" not in selected,
         help="One box per quarter from the DCF low end to the high end, with the middle as a line. "
@@ -243,17 +260,25 @@ def stock_page():
                         "Above +900% it shows how many times the price multiplied (×10 = +900%).")
 
     # ---- Graph ----
+    yearly_only = set()
+
     def series_for(metric: str) -> pd.Series:
         if metric in DCF:
             src = dcf_df if not dcf_df.empty else calc_hist  # calculated estimates until some are typed in
             s = src[metric.removeprefix("dcf_")].dropna()
             s.index = pd.DatetimeIndex([quarter_mid(p) for p in s.index])
         elif metric in QUARTERLY:
-            s = q_df[metric].dropna()
+            s = q_df[metric].dropna() if metric in q_df else pd.Series(dtype=float)
+            if s.empty:  # no quarterly reports (common outside the US): show the yearly values instead
+                yearly = metric.removesuffix("_ttm")
+                s = a_df[yearly].dropna() if yearly in a_df else pd.Series(dtype=float)
+                s.index = pd.DatetimeIndex([pd.Timestamp(f"{y}-07-01") for y in s.index])
+                yearly_only.add(metric)
+                return in_range(s)
             s.index = pd.DatetimeIndex([quarter_mid(p) for p in s.index])
         else:
             s = daily_df[metric].dropna()
-            if quarterly_mode:
+            if quarterly_mode and metric != "close":
                 s = s.groupby(s.index.to_period("Q")).mean()
                 s.index = pd.DatetimeIndex([quarter_mid(str(p)) for p in s.index])
         return in_range(s)
@@ -266,8 +291,11 @@ def stock_page():
     axis_slots = [("left", 0.0), ("right", 1.0), ("left", 0.06), ("right", 0.94)]
     price_axis = None
     first_dates = []
-    for i, metric in enumerate(selected):
-        meta, color = GRAPH[metric], COLORS[i]
+    bar_metrics = [m for m in selected if m in QUARTERLY]
+    # Bars get the first axes so they are drawn behind the lines (later axes are drawn on top).
+    draw_order = bar_metrics + [m for m in selected if m not in bar_metrics]
+    for i, metric in enumerate(draw_order):
+        meta, color = GRAPH[metric], COLORS[selected.index(metric)]
         name = meta.label
         s = series_for(metric)
         if not in_range(s).empty:
@@ -278,25 +306,27 @@ def stock_page():
             own = in_range(daily_df["close"].dropna())
             if overlays and len(own) > 1:
                 name = f"{meta.label} ({own.iloc[-1] / own.iloc[0] - 1:+.0%} in the time range)"
-        if metric == "close" and quarterly_mode:
+        if metric in QUARTERLY:
+            # Bars side by side when several quarterly metrics are shown.
+            width = (YEAR_BAR_WIDTH if metric in yearly_only else QUARTER_BAR_WIDTH) / len(bar_metrics)
+            k = bar_metrics.index(metric)
             fig.add_trace(go.Bar(
-                x=s.index, y=s.values, name=f"{name} (quarter average)", yaxis=axis, width=QUARTER_BAR_WIDTH,
-                marker_color=color, opacity=0.65,
-                text=[fmt(v) for v in s.values] if bar_values else None, textposition="outside"))
+                x=s.index, y=s.values, yaxis=axis, width=width, offset=-width * len(bar_metrics) / 2 + k * width,
+                name=(f"{YEARLY[metric.removesuffix('_ttm')].label} (yearly; no quarterly data)"
+                      if metric in yearly_only and metric.removesuffix("_ttm") in YEARLY else name),
+                marker_color=color, opacity=0.45, cliponaxis=False,
+                text=[fmt(v, meta.percent) for v in s.values] if bar_values else None, textposition="outside"))
         else:
+            points = metric in DCF or (quarterly_mode and metric != "close")
             fig.add_trace(go.Scatter(x=s.index, y=s.values, name=name, yaxis=axis,
-                                     mode="lines+markers" if quarterly_mode or len(s) < 30 else "lines",
-                                     line=dict(color=color),
-                                     text=[fmt(v) for v in s.values] if bar_values and quarterly_mode else None,
-                                     textposition="top center"))
-            if bar_values and quarterly_mode:
-                fig.data[-1].mode = "lines+markers+text"
+                                     mode="lines+markers" if points or len(s) < 30 else "lines",
+                                     line=dict(color=color, width=2 if metric == "close" else 1.5)))
         for kind in trends:
             fitted, label = charts.trend(in_range(s), kind, degree)
             if not fitted.empty:
                 fig.add_trace(go.Scatter(x=fitted.index, y=fitted.values, name=f"{meta.label}: {label}", yaxis=axis,
                                          mode="lines", line=dict(color=color, dash="dash", width=1.5)))
-        for years in averages:
+        for years in averages if metric in average_for else []:
             avg = charts.trailing_average(in_range(s), years)
             if avg:
                 a_start, a_end, value = avg
@@ -331,20 +361,18 @@ def stock_page():
             factor = own[first_day] / other[first_day]
             shown = in_range(other[other.index >= first_day])
             change = shown.iloc[-1] / shown.iloc[0] - 1
-            if quarterly_mode:
-                other = other.groupby(other.index.to_period("Q")).mean()
-                other.index = pd.DatetimeIndex([quarter_mid(str(p)) for p in other.index])
             other = in_range(other)
+            label = index_names.get(t) or names[t]
             fig.add_trace(go.Scatter(
                 x=other.index, y=other.values * factor, yaxis=price_axis, mode="lines", customdata=other.values,
-                name=f"{names[t]} (scaled to the stock on {first_day:%d %b %Y}; {change:+.0%} in the time range)",
-                hovertemplate=f"{names[t]}: %{{customdata:,.2f}} (scaled %{{y:,.2f}})<extra></extra>",
+                name=f"{label} (scaled to the stock on {first_day:%d %b %Y}; {change:+.0%} in the time range)",
+                hovertemplate=f"{label}: %{{customdata:,.2f}} (scaled %{{y:,.2f}})<extra></extra>",
                 line=dict(color=COMPARE_COLORS[j % len(COMPARE_COLORS)], width=1.8, dash="dash")))
 
     # The graph starts at the first date with data for the selected variables.
     x_start = max(start, min(first_dates) - pd.Timedelta(days=45)) if first_dates else start
     fig.update_layout(
-        height=580, hovermode="x unified", margin=dict(l=60, r=60, t=40, b=30), bargap=0,
+        height=580, hovermode="x unified", margin=dict(l=60, r=60, t=40, b=30), barmode="overlay",
         legend=dict(orientation="h", y=-0.28),
         xaxis=dict(domain=[0.08, 0.92], range=[x_start, end + pd.Timedelta(days=1)],
 ))
