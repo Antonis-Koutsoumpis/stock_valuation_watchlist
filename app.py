@@ -174,12 +174,15 @@ def stock_page():
         index_names[t] = n
         if inflation.CPI_PATH.exists():
             index_names[f"{t}{REAL}"] = f"{n} (inflation-adjusted)"
+    for r in watchlist[watchlist["ticker"].isin(NOT_PRICES)].itertuples():
+        index_names[r.ticker] = r.name
     shown_indices = st.sidebar.multiselect(
         "Show an index on the graph", list(index_names), format_func=lambda t: index_names[t],
         help="Draws the index as a dashed line with the Price, scaled so it starts at the stock's price on the first "
              "day of the time range. Both then move by the same % as the index and stock, so you see at a "
              "glance which grew more. The legend shows the % change of each in the time range. "
-             "Inflation-adjusted: in today's dollars, using US consumer prices (CPI, monthly, from FRED).")
+             "Inflation-adjusted: in today's dollars, using US consumer prices (CPI, monthly, from FRED). "
+             "The VIX (expected volatility) is not scaled: it gets its own axis on the right.")
 
     first, last_day = daily_df.index.min().date(), daily_df.index.max().date()
     default_start = max(first, (pd.Timestamp(last_day) - pd.DateOffset(years=5)).date())
@@ -303,7 +306,8 @@ def stock_page():
     def in_range(s: pd.Series) -> pd.Series:
         return s[(s.index >= start) & (s.index <= end + pd.Timedelta(days=1))]
 
-    overlays = list(dict.fromkeys([*shown_indices, *compare]))
+    levels = [t for t in shown_indices if t in NOT_PRICES]  # own axis, not scaled to the stock
+    overlays = list(dict.fromkeys([t for t in [*shown_indices, *compare] if t not in NOT_PRICES]))
     fig = go.Figure()
     axis_slots = [("left", 0.0), ("right", 1.0), ("left", 0.06), ("right", 0.94)]
     price_axis = None
@@ -385,6 +389,16 @@ def stock_page():
                 name=f"{label} (scaled to the stock on {first_day:%d %b %Y}; {change:+.0%} in the time range)",
                 hovertemplate=f"{label}: %{{customdata:,.2f}} (scaled %{{y:,.2f}})<extra></extra>",
                 line=dict(color=COMPARE_COLORS[j % len(COMPARE_COLORS)], width=1.8, dash="dash")))
+
+    for j, t in enumerate(levels):
+        axis_id = 9 + j
+        level = in_range(load_close(t))
+        fig.add_trace(go.Scatter(x=level.index, y=level.values, yaxis=f"y{axis_id}", mode="lines",
+                                 name=f"{index_names[t]} (right axis)",
+                                 line=dict(color=COMPARE_COLORS[(len(overlays) + j) % len(COMPARE_COLORS)], width=1.2)))
+        fig.update_layout({f"yaxis{axis_id}": dict(title=t, side="right", overlaying="y", anchor="free",
+                                                   position=1.0, autoshift=True, showgrid=False,
+                                                   type="log" if log_scale else "linear")})
 
     # The graph starts at the first date with data for the selected variables.
     x_start = max(start, min(first_dates) - pd.Timedelta(days=45)) if first_dates else start
