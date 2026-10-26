@@ -1,6 +1,7 @@
 ticker,name,exchange,google_symbol,yahoo_symbol,currency,type,yahoo_check
 NDX,Nasdaq-100,INDEX,INDEXNASDAQ:NDX,^NDX,USD,index,ok
 SPX,S&P 500,INDEX,INDEXSP:.INX,^GSPC,USD,index,ok
+VIX,CBOE Volatility Index (VIX),INDEX,INDEXCBOE:VIX,^VIX,USD,index,ok
 AAPL,Apple Inc.,NASDAQ,NASDAQ:AAPL,AAPL,USD,stock,ok
 ABBV,AbbVie Inc.,NYSE,NYSE:ABBV,ABBV,USD,stock,ok
 ABNB,"Airbnb, Inc.",NASDAQ,NASDAQ:ABNB,ABNB,USD,stock,ok

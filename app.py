@@ -20,6 +20,7 @@ CALC_FILL = "rgba(255, 140, 0, 0.18)"
 CALC_LINE = "rgba(230, 120, 0, 0.95)"
 PERIOD_YEARS = {"1y": 1, "3y": 3, "5y": 5, "10y": 10, "20y": 20, "All": None, "Custom": None}
 REAL = " real"
+NOT_PRICES = {"VIX"}  # a volatility level, not a price: no inflation adjustment or scaling onto a stock
 YEAR_BAR_WIDTH = 300 * 24 * 3600 * 1000  # ms
 QUARTER_BAR_WIDTH = 75 * 24 * 3600 * 1000  # ms
 
@@ -135,10 +136,14 @@ def show_table(df: pd.DataFrame, glossary: dict):
 # ---------------------------------------------------------------- stock page
 def stock_page():
     watchlist = load_watchlist()
-    options = [f"{r.ticker} · {r.name}" for r in watchlist.itertuples()]
-    if inflation.CPI_PATH.exists():
-        options += [f"{r.ticker}{REAL} · {r.name} (inflation-adjusted)"
-                    for r in watchlist[watchlist["type"] == "index"].itertuples()]
+    # Indices first, starting with the S&P 500 (the landing page), then the stocks.
+    indices = watchlist[watchlist["type"] == "index"].sort_values("ticker", key=lambda t: t != "SPX", kind="stable")
+    options = []
+    for r in indices.itertuples():
+        options.append(f"{r.ticker} · {r.name}")
+        if inflation.CPI_PATH.exists() and r.ticker not in NOT_PRICES:
+            options.append(f"{r.ticker}{REAL} · {r.name} (inflation-adjusted)")
+    options += [f"{r.ticker} · {r.name}" for r in watchlist[watchlist["type"] != "index"].itertuples()]
     choice = st.sidebar.selectbox("Find a stock", options, index=0, placeholder="Type a name or ticker",
                                   help="Indices are also available adjusted for inflation (in today's dollars, "
                                        "using US consumer prices from FRED).")
@@ -163,7 +168,7 @@ def stock_page():
     selected = st.sidebar.multiselect(
         "Variables", available, default=["close"], format_func=lambda m: GRAPH[m].label, max_selections=4,
         help="Up to 4, each with its own axis. Hover the ? next to each name under the graph to see what it means.")
-    index_rows = watchlist[watchlist["type"] == "index"]
+    index_rows = watchlist[(watchlist["type"] == "index") & ~watchlist["ticker"].isin(NOT_PRICES)]
     index_names = {}
     for t, n in zip(index_rows["ticker"], index_rows["name"]):
         index_names[t] = n
@@ -220,7 +225,7 @@ def stock_page():
              "Shown with the Price variable.")
 
     st.sidebar.markdown("### Compare")
-    indices = watchlist[watchlist["type"] == "index"]["ticker"].tolist()
+    indices = index_rows["ticker"].tolist()
     others = [t for t in indices + watchlist[watchlist["type"] != "index"]["ticker"].tolist() if t != ticker]
     names = watchlist.set_index("ticker")["name"]
     compare = st.sidebar.multiselect(
@@ -251,7 +256,7 @@ def stock_page():
     last = daily_df.dropna(subset=["close"]).iloc[-1]
     roic = q_df["roic_ttm"].dropna().iloc[-1] if "roic_ttm" in q_df and q_df["roic_ttm"].notna().any() else None
     cols = st.columns(6)
-    cols[0].metric(f"Price ({stock['currency']})", fmt(last["close"]),
+    cols[0].metric("Level" if ticker in NOT_PRICES else f"Price ({stock['currency']})", fmt(last["close"]),
                    help=f"{DAILY['close'].tooltip}\n\nClose on {last.name:%d %b %Y}.")
     cols[1].metric("Trailing P/E", fmt(last.get("trailing_pe")), help=DAILY["trailing_pe"].tooltip)
     cols[2].metric("Forward P/E", fmt(last.get("forward_pe")), help=DAILY["forward_pe"].tooltip)
