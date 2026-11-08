@@ -147,10 +147,10 @@ def valuation(shiller: pd.DataFrame, equities: pd.Series, gdp: pd.Series, ten_ye
 def load_valuation() -> pd.DataFrame:
     def series(name):
         df = _read(f"fred_{name}.csv")
-        return df["value"] if not df.empty else pd.Series(dtype=float)
+        return df.iloc[:, 0] if not df.empty else pd.Series(dtype=float)  # column named after the series
     def multpl(name):
         df = _read(f"multpl_{name}.csv")
-        return df["value"] if not df.empty else pd.Series(dtype=float)
+        return df.iloc[:, 0] if not df.empty else pd.Series(dtype=float)
     return valuation(_read("shiller.csv"), series("NCBEILQ027S"), series("GDP"), series("DGS10"),
                      multpl("cape"), multpl("pe"))
 
