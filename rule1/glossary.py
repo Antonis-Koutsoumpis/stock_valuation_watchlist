@@ -66,6 +66,17 @@ DAILY = {
         "S&P 500 price ÷ reported earnings of the last 12 months, since 1871. Source: Robert Shiller (Yale) and multpl.com; "
         "earnings arrive a few months late. For buying: LOWER is better (below its long-term average of about 16 "
         "= cheap). Jumps up in recessions because earnings fall, so check it together with CAPE.", "Monthly"),
+    "sp500_eps": Metric(
+        "S&P 500 EPS (12 months)",
+        "Earnings per share of the S&P 500 as a whole: the reported profit of all 500 companies over the last "
+        "12 months, per unit of the index (in index points, so S&P 500 ÷ this = its P/E). Since 1871. For buying: "
+        "steady growth is good; compare its growth with the price: price rising faster than EPS = getting more "
+        "expensive. Source: Robert Shiller (Yale) and multpl.com.", "Monthly"),
+    "sp500_sales": Metric(
+        "S&P 500 sales per share (12 months)",
+        "Revenue of all S&P 500 companies over the last 12 months, per unit of the index (index points). "
+        "S&P 500 ÷ this = its price/sales. For buying: steady growth is good; price rising much faster than "
+        "sales = getting more expensive. Source: multpl.com (S&P data).", "Quarterly"),
     "buffett": Metric(
         "Buffett indicator",
         "Market value of US non-financial companies ÷ US GDP (yearly economic output). Above its long-term average = "

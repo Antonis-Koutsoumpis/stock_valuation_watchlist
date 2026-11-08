@@ -17,8 +17,9 @@ from .store import DATA_DIR
 
 MARKET_DIR = DATA_DIR / "_market"
 SHILLER_URL = "http://www.econ.yale.edu/~shiller/data/ie_data.xls"
-MULTPL_URL = "https://www.multpl.com/{}/table/by-month"
-MULTPL_TABLES = {"cape": "shiller-pe", "pe": "s-p-500-pe-ratio"}
+MULTPL_URL = "https://www.multpl.com/{}/table/{}"
+MULTPL_TABLES = {"cape": ("shiller-pe", "by-month"), "pe": ("s-p-500-pe-ratio", "by-month"),
+                 "eps": ("s-p-500-earnings", "by-month"), "sales": ("s-p-500-sales", "by-quarter")}
 FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={}"
 FRED_SERIES = {
     "NCBEILQ027S": "US corporate equities, market value ($ millions, quarterly)",
@@ -31,7 +32,7 @@ VALUATION_PROXY = {"^GSPC": "SPY", "^NDX": "QQQ"}
 # Nasdaq-100 CAPE or P/E history, so the Nasdaq-100 page shows the US-market ones next to its own QQQ P/E.
 MARKET_TICKERS = {"SPX", "NDX"}
 ETF_NAMES = {"SPX": "SPY fund (tracks the S&P 500)", "NDX": "QQQ fund (tracks the Nasdaq-100)"}
-COLUMNS = ["cape", "pe_shiller", "buffett", "earnings_yield_gap", "ten_year_yield"]
+COLUMNS = ["cape", "pe_shiller", "sp500_eps", "sp500_sales", "buffett", "earnings_yield_gap", "ten_year_yield"]
 
 
 def fetch_fred(series: str) -> pd.Series:
@@ -48,7 +49,7 @@ def parse_multpl(html: str) -> pd.Series:
     """multpl.com 'by month' table: Date ('Nov 1, 2026') and Value ('39.93', sometimes with a note)."""
     table = pd.read_html(io.StringIO(html))[0]
     table.columns = ["date", "value"]
-    values = pd.to_numeric(table["value"].astype(str).str.extract(r"(-?\d+(?:\.\d+)?)")[0], errors="coerce")
+    values = pd.to_numeric(table["value"].astype(str).str.replace(",", "").str.extract(r"(-?\d+(?:\.\d+)?)")[0], errors="coerce")
     dates = pd.to_datetime(table["date"], errors="coerce")
     s = pd.Series(values.values, index=pd.DatetimeIndex(dates, name="date")).dropna().sort_index()
     # The current month appears twice (today's value and the 1st of the month): keep the latest.
@@ -56,8 +57,8 @@ def parse_multpl(html: str) -> pd.Series:
     return s[~s.index.duplicated(keep="last")]
 
 
-def fetch_multpl(page: str) -> pd.Series:
-    resp = requests.get(MULTPL_URL.format(page), timeout=60,
+def fetch_multpl(page: str, period: str = "by-month") -> pd.Series:
+    resp = requests.get(MULTPL_URL.format(page, period), timeout=60,
                         headers={"User-Agent": "Mozilla/5.0 (stock-valuation-watchlist; monthly table)"})
     resp.raise_for_status()
     return parse_multpl(resp.text)
@@ -100,9 +101,9 @@ def update_market() -> None:
             print(f"FRED {series}: {len(s)} rows, last {s.index[-1]:%Y-%m-%d}")
         except Exception as exc:
             print(f"FRED {series} failed: {exc}")
-    for name, page in MULTPL_TABLES.items():
+    for name, (page, period) in MULTPL_TABLES.items():
         try:
-            s = fetch_multpl(page)
+            s = fetch_multpl(page, period)
             s.rename("value").to_csv(MARKET_DIR / f"multpl_{name}.csv")
             print(f"multpl {name}: {len(s)} months, last {s.index[-1]:%Y-%m}")
         except Exception as exc:
@@ -122,10 +123,18 @@ def _read(name: str) -> pd.DataFrame:
 
 
 def valuation(shiller: pd.DataFrame, equities: pd.Series, gdp: pd.Series, ten_year: pd.Series,
-              recent_cape: pd.Series | None = None, recent_pe: pd.Series | None = None) -> pd.DataFrame:
+              recent_cape: pd.Series | None = None, recent_pe: pd.Series | None = None,
+              recent_eps: pd.Series | None = None, sales: pd.Series | None = None) -> pd.DataFrame:
     """Monthly/quarterly/daily market metrics on one date index (not filled forward).
-    recent_cape / recent_pe (multpl.com) win over Shiller's file where both have a month."""
+    recent_* (multpl.com) win over Shiller's file where both have a month."""
     parts = []
+    eps = shiller["earnings"].dropna() if not shiller.empty else pd.Series(dtype=float)
+    if recent_eps is not None and not recent_eps.empty:
+        eps = recent_eps.combine_first(eps)
+    if not eps.empty:
+        parts.append(eps.rename("sp500_eps"))
+    if sales is not None and not sales.empty:
+        parts.append(sales.rename("sp500_sales"))
     cape, pe = pd.Series(dtype=float), pd.Series(dtype=float)
     if not shiller.empty:
         cape = shiller["cape"].dropna()
@@ -158,7 +167,7 @@ def load_valuation() -> pd.DataFrame:
         s = df.iloc[:, 0] if not df.empty else pd.Series(dtype=float)
         return s[~s.index.duplicated(keep="first")]  # files saved before duplicates were removed
     return valuation(_read("shiller.csv"), series("NCBEILQ027S"), series("GDP"), series("DGS10"),
-                     multpl("cape"), multpl("pe"))
+                     multpl("cape"), multpl("pe"), multpl("eps"), multpl("sales"))
 
 
 def for_days(values: pd.DataFrame, days: pd.DatetimeIndex) -> pd.DataFrame:

@@ -359,3 +359,18 @@ def test_multpl_table_and_recent_months_win():
     assert v.loc["2023-09-01", "cape"] == pytest.approx(29.0)  # multpl wins
     assert v.loc["2026-11-01", "cape"] == pytest.approx(39.95)
     assert v.loc["2023-09-01", "pe_shiller"] == pytest.approx(20.0)
+
+
+def test_multpl_amounts_with_commas_and_sales():
+    from rule1 import market
+    html = """<table><tr><th>Date</th><th>Value</th></tr><tr><td>Jun 30, 2026</td><td>$1,982.09</td></tr>
+    <tr><td>Mar 31, 2026</td><td>1,950.10</td></tr></table>"""
+    s = market.parse_multpl(html)
+    assert s.tolist() == pytest.approx([1950.10, 1982.09])
+    shiller = pd.DataFrame({"price": [100.0], "earnings": [5.0], "dividends": [1.0], "cape": [30.0]},
+                           index=pd.to_datetime(["2023-09-01"]))
+    empty = pd.Series(dtype=float)
+    v = market.valuation(shiller, empty, empty, empty, recent_eps=pd.Series([6.0], index=pd.to_datetime(["2026-06-01"])),
+                         sales=s)
+    assert v.loc["2023-09-01", "sp500_eps"] == 5.0 and v.loc["2026-06-01", "sp500_eps"] == 6.0
+    assert v.loc["2026-06-01", "sp500_sales"] == pytest.approx(1982.09)
