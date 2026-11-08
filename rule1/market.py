@@ -27,8 +27,10 @@ FRED_SERIES = {
 }
 # Yahoo has no P/E for an index itself, but has one for an ETF that tracks it.
 VALUATION_PROXY = {"^GSPC": "SPY", "^NDX": "QQQ"}
-# Index pages that get the whole-market metrics (they describe the S&P 500 / US market).
-MARKET_TICKERS = {"SPX"}
+# Index pages that get the whole-market metrics. They describe the S&P 500 / US market; there is no free
+# Nasdaq-100 CAPE or P/E history, so the Nasdaq-100 page shows the US-market ones next to its own QQQ P/E.
+MARKET_TICKERS = {"SPX", "NDX"}
+ETF_NAMES = {"SPX": "SPY fund (tracks the S&P 500)", "NDX": "QQQ fund (tracks the Nasdaq-100)"}
 COLUMNS = ["cape", "pe_shiller", "buffett", "earnings_yield_gap", "ten_year_yield"]
 
 

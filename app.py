@@ -471,12 +471,16 @@ def stock_page():
 
 def variables_help(ticker: str) -> str:
     text = "Up to 4, each with its own axis. Hover the ? next to each name under the graph to see what it means."
-    if ticker.removesuffix(REAL) in market.MARKET_TICKERS:
+    base = ticker.removesuffix(REAL)
+    if base in market.MARKET_TICKERS:
         text += ("\n\n**Valuation of the US market** (free sources, updated daily; compare today's value with "
                  "its own history, e.g. with Average lines and the All time range):")
+        if base != "SPX":
+            text += (" these describe the whole US market (S&P 500), not this index itself: no free history of "
+                     "its own CAPE or P/E exists. Its own valuation is the Trailing P/E below.")
         for col in market.COLUMNS:
             text += f"\n- **{DAILY[col].label}**: {DAILY[col].help} Updated: {DAILY[col].frequency.lower()}."
-        text += ("\n\nTrailing P/E and Price/Book come from the SPY fund (tracks the S&P 500) on Yahoo and are "
+        text += (f"\n\nTrailing P/E and Price/Book come from the {market.ETF_NAMES[base]} on Yahoo and are "
                  "stored from November 2026 onwards.")
     return text
 
