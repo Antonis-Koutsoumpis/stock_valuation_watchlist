@@ -316,3 +316,28 @@ def test_inflation_adjusted_prices():
     prices = pd.Series([10.0, 10.0, 10.0], index=pd.to_datetime(["2020-01-15", "2020-02-15", "2020-03-15"]))
     real = inflation.real(prices, cpi)
     assert real.tolist() == pytest.approx([11.0, 10.0, 10.0])
+
+
+def test_shiller_parse_and_market_valuation():
+    from rule1 import market
+    raw = pd.DataFrame([
+        ["Stock market data", None, None, None, None],
+        ["Date", "P", "D", "E", "CAPE"],
+        [2023.01, 100.0, 2.0, 5.0, 25.0],
+        [2023.1, 110.0, 2.0, 5.5, 26.0],   # October
+        [2023.11, 120.0, None, None, None],
+        [None, None, None, None, None],
+    ])
+    sh = market.parse_shiller(raw)
+    assert list(sh.index.month) == [1, 10, 11]
+    assert sh.loc["2023-10-01", "cape"] == 26.0
+    ten = pd.Series([4.0, 4.0], index=pd.to_datetime(["2023-10-02", "2023-10-03"]))
+    eq = pd.Series([50_000_000.0], index=pd.to_datetime(["2023-07-01"]))
+    gdp = pd.Series([25_000.0], index=pd.to_datetime(["2023-07-01"]))
+    v = market.valuation(sh, eq, gdp, ten)
+    assert v.loc["2023-10-01", "pe_shiller"] == pytest.approx(20.0)
+    assert v.loc["2023-10-01", "earnings_yield_gap"] == pytest.approx(0.05 - 0.04)
+    assert v.loc["2023-07-01", "buffett"] == pytest.approx(2.0)
+    days = pd.bdate_range("2023-10-02", "2023-10-06")
+    daily = market.for_days(v, days)
+    assert daily["cape"].iloc[0] == 26.0 and daily["buffett"].iloc[0] == pytest.approx(2.0)

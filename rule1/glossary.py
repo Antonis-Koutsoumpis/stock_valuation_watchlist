@@ -54,6 +54,27 @@ DAILY = {
         "The share of profit paid out as dividends. 30% = 30 of every 100 earned.",
         "Daily (changes when new results are published)", percent=True),
     "market_cap": Metric("Market cap", "Total value of the company on the stock market: price × shares.", "Daily"),
+    # Whole US market (S&P 500 page only)
+    "cape": Metric(
+        "CAPE (Shiller P/E)",
+        "S&P 500 price ÷ the average of the last 10 years of earnings, adjusted for inflation. Smooths out "
+        "booms and recessions; high values have been followed by low returns over the next 10 years. "
+        "Source: Robert Shiller (Yale).", "Monthly"),
+    "pe_shiller": Metric(
+        "S&P 500 P/E (12 months)",
+        "S&P 500 price ÷ reported earnings of the last 12 months, since 1871. Source: Robert Shiller (Yale); "
+        "earnings arrive a few months late.", "Monthly"),
+    "buffett": Metric(
+        "Buffett indicator",
+        "Market value of all US companies ÷ US GDP (yearly economic output). Above its long-term average = "
+        "stocks are expensive compared with the economy. Source: FRED (US Federal Reserve).",
+        "Quarterly, about 3 months late", percent=True),
+    "earnings_yield_gap": Metric(
+        "Earnings yield − 10y bond yield",
+        "1 ÷ P/E (what the S&P 500 earns per 100 invested) minus the 10-year US Treasury yield. Low or "
+        "negative = stocks pay little extra over safe bonds, i.e. expensive.", "Monthly", percent=True),
+    "ten_year_yield": Metric(
+        "10-year Treasury yield", "Interest on 10-year US government bonds. Source: FRED.", "Daily", percent=True),
 }
 
 QUARTERLY = {

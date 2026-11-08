@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from rule1 import build, charts, inflation, manual, metrics, screener, valuation
+from rule1 import build, charts, inflation, manual, market, metrics, screener, valuation
 from rule1.glossary import CAGR_HELP, DAILY, DCF, GRAPH, QUARTERLY, YEARLY, Metric
 from rule1.periods import quarter_end, quarter_start
 from rule1.store import DATA_DIR, read_csv
@@ -52,7 +52,7 @@ def load_stock(ticker: str):
     daily, q, a, dcf = build.load_stock(load_watchlist().set_index("ticker").loc[ticker.removesuffix(REAL)],
                                         load_manual())
     if ticker.endswith(REAL):
-        daily = daily[["close"]].assign(close=load_close(ticker)).dropna()
+        daily = daily.assign(close=load_close(ticker)).dropna(subset=["close"])
     return daily, q, a, dcf
 
 
@@ -279,6 +279,9 @@ def stock_page():
                    help=f"Price change over the chosen time range ({span}), without dividends. "
                         "Above +900% it shows how many times the price multiplied (×10 = +900%).")
 
+    if ticker.removesuffix(REAL) in market.MARKET_TICKERS:
+        market_table()
+
     # ---- Graph ----
     yearly_only = set()
 
@@ -461,6 +464,43 @@ def stock_page():
                      if fin != stock["currency"] else f"All values in {stock['currency']}.")
     st.caption(f"{currency_note} Sources: SEC EDGAR (US), Yahoo Finance, and manual entries "
                "(manual values always win). TTM = trailing 12 months. Quarters are calendar quarters.")
+
+
+@st.cache_data(ttl=3600)
+def load_market() -> pd.DataFrame:
+    return market.load_valuation()
+
+
+def market_table():
+    """How expensive the US market is today compared with its own history."""
+    values = load_market()
+    rows = {}
+    for col in [c for c in market.COLUMNS if c != "ten_year_yield" and c in values]:
+        s = values[col].dropna()
+        if s.empty:
+            continue
+        meta, last = DAILY[col], s.iloc[-1]
+        recent = s[s.index > s.index[-1] - pd.DateOffset(years=10)]
+        # for the yield gap a LOW value is expensive, for the others a HIGH value is
+        share = (s < last).mean() if col != "earnings_yield_gap" else (s > last).mean()
+        rows[meta.label] = {
+            "Latest": f"{fmt(last, meta.percent)} ({s.index[-1]:%b %Y})",
+            "10-year average": fmt(recent.mean(), meta.percent),
+            "Long-term average": f"{fmt(s.mean(), meta.percent)} (since {s.index[0]:%Y})",
+            "More expensive than": f"{share:.0%} of history",
+        }
+    if not rows:
+        return
+    st.subheader("Is the US market expensive?",
+                 help="Compares today's valuation of the S&P 500 / US market with its own history. Add these "
+                      "metrics to the graph from Variables to see them over time.")
+    table = pd.DataFrame.from_dict(rows, orient="index")
+    st.dataframe(table, use_container_width=True, column_config={
+        "More expensive than": st.column_config.Column(
+            help="Share of all past months (or quarters) that were cheaper than today. 90% = more expensive "
+                 "than 90% of history.")})
+    st.caption("Sources: Robert Shiller (Yale) for CAPE and P/E, FRED for the Buffett indicator and bond yields. "
+               "Trailing and forward P/E above are from the SPY ETF on Yahoo, stored daily from now on.")
 
 
 def calculated_value_tab(calc: dict, currency: str, horizon: int, discount: float):

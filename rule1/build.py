@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from . import manual, metrics
+from . import manual, market, metrics
 from .store import DATA_DIR, read_csv
 
 
@@ -23,4 +23,6 @@ def load_stock(row: pd.Series, man: dict) -> tuple[pd.DataFrame, pd.DataFrame, p
                          index_col="date", parse_dates=["date"])
         fx = rates["close"] if not rates.empty else None
     d = metrics.daily(prices, q, md, a, fx, float(row.get("adr_ratio") or 1))
+    if ticker in market.MARKET_TICKERS and not d.empty:
+        d = d.join(market.for_days(market.load_valuation(), d.index))
     return d, q, a, metrics.dcf(man["dcf"], ticker)

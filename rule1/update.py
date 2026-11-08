@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import build, fetch_sec, fetch_yahoo, inflation, manual, screener
+from . import build, fetch_sec, fetch_yahoo, inflation, manual, market, screener
 from .store import DATA_DIR, merge_daily, merge_statements, stock_dir
 
 WATCHLIST = Path(__file__).resolve().parent.parent / "config" / "watchlist.csv"
@@ -41,7 +41,9 @@ def update_stock(row) -> None:
     prices = retry(fetch_yahoo.fetch_prices, row.yahoo_symbol, not daily_path.exists())
     if prices.empty:
         raise RuntimeError(f"no prices from Yahoo for {row.yahoo_symbol}")
-    snapshot = retry(fetch_yahoo.fetch_snapshot, row.yahoo_symbol, prices.index.max())
+    # An index has no P/E on Yahoo; an ETF that tracks it does (SPY for the S&P 500).
+    snapshot_symbol = market.VALUATION_PROXY.get(row.yahoo_symbol, row.yahoo_symbol)
+    snapshot = retry(fetch_yahoo.fetch_snapshot, snapshot_symbol, prices.index.max())
     merge_daily(daily_path, prices.join(snapshot, how="left"))
     print(f"{row.ticker}: {len(prices)} price rows, snapshot for {prices.index.max():%Y-%m-%d}")
 
@@ -112,6 +114,7 @@ def main(tickers: list[str]) -> int:
         retry(inflation.update_cpi)
     except Exception:
         traceback.print_exc()
+    market.update_market()
     man = manual.load()
     manual.backup(man)
     write_screener_summary(man)
