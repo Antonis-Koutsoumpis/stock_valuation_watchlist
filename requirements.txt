@@ -6,3 +6,4 @@ streamlit>=1.40
 plotly>=5.24
 openpyxl
 xlrd
+lxml
