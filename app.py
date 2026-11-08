@@ -167,7 +167,7 @@ def stock_page():
                  or (m in DCF and "close" in daily_df)]
     selected = st.sidebar.multiselect(
         "Variables", available, default=["close"], format_func=lambda m: GRAPH[m].label, max_selections=4,
-        help="Up to 4, each with its own axis. Hover the ? next to each name under the graph to see what it means.")
+        help=variables_help(ticker))
     index_rows = watchlist[(watchlist["type"] == "index") & ~watchlist["ticker"].isin(NOT_PRICES)]
     index_names = {}
     for t, n in zip(index_rows["ticker"], index_rows["name"]):
@@ -278,9 +278,6 @@ def stock_page():
     cols[5].metric(f"Total growth{label}", total_text,
                    help=f"Price change over the chosen time range ({span}), without dividends. "
                         "Above +900% it shows how many times the price multiplied (×10 = +900%).")
-
-    if ticker.removesuffix(REAL) in market.MARKET_TICKERS:
-        market_table()
 
     # ---- Graph ----
     yearly_only = set()
@@ -466,41 +463,16 @@ def stock_page():
                "(manual values always win). TTM = trailing 12 months. Quarters are calendar quarters.")
 
 
-@st.cache_data(ttl=3600)
-def load_market() -> pd.DataFrame:
-    return market.load_valuation()
-
-
-def market_table():
-    """How expensive the US market is today compared with its own history."""
-    values = load_market()
-    rows = {}
-    for col in [c for c in market.COLUMNS if c != "ten_year_yield" and c in values]:
-        s = values[col].dropna()
-        if s.empty:
-            continue
-        meta, last = DAILY[col], s.iloc[-1]
-        recent = s[s.index > s.index[-1] - pd.DateOffset(years=10)]
-        # for the yield gap a LOW value is expensive, for the others a HIGH value is
-        share = (s < last).mean() if col != "earnings_yield_gap" else (s > last).mean()
-        rows[meta.label] = {
-            "Latest": f"{fmt(last, meta.percent)} ({s.index[-1]:%b %Y})",
-            "10-year average": fmt(recent.mean(), meta.percent),
-            "Long-term average": f"{fmt(s.mean(), meta.percent)} (since {s.index[0]:%Y})",
-            "More expensive than": f"{share:.0%} of history",
-        }
-    if not rows:
-        return
-    st.subheader("Is the US market expensive?",
-                 help="Compares today's valuation of the S&P 500 / US market with its own history. Add these "
-                      "metrics to the graph from Variables to see them over time.")
-    table = pd.DataFrame.from_dict(rows, orient="index")
-    st.dataframe(table, use_container_width=True, column_config={
-        "More expensive than": st.column_config.Column(
-            help="Share of all past months (or quarters) that were cheaper than today. 90% = more expensive "
-                 "than 90% of history.")})
-    st.caption("Sources: Robert Shiller (Yale) and multpl.com (recent months) for CAPE and P/E, FRED for the Buffett indicator and bond yields. "
-               "Trailing and forward P/E above are from the SPY ETF on Yahoo, stored daily from now on.")
+def variables_help(ticker: str) -> str:
+    text = "Up to 4, each with its own axis. Hover the ? next to each name under the graph to see what it means."
+    if ticker.removesuffix(REAL) in market.MARKET_TICKERS:
+        text += ("\n\n**Valuation of the US market** (free sources, updated daily; compare today's value with "
+                 "its own history, e.g. with Average lines and the All time range):")
+        for col in market.COLUMNS:
+            text += f"\n- **{DAILY[col].label}**: {DAILY[col].help} Updated: {DAILY[col].frequency.lower()}."
+        text += ("\n\nTrailing P/E and Price/Book come from the SPY fund (tracks the S&P 500) on Yahoo and are "
+                 "stored from November 2026 onwards.")
+    return text
 
 
 def calculated_value_tab(calc: dict, currency: str, horizon: int, discount: float):
