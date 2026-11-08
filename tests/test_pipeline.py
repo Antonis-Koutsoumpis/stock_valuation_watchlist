@@ -346,16 +346,16 @@ def test_shiller_parse_and_market_valuation():
 def test_multpl_table_and_recent_months_win():
     from rule1 import market
     html = """<table id="datatable"><tr><th>Date</th><th>Value</th></tr>
-    <tr><td>Nov 1, 2026</td><td>&#x2002;
+    <tr><td>Nov 8, 2026</td><td>39.95</td></tr><tr><td>Nov 1, 2026</td><td>&#x2002;
     39.93
     </td></tr><tr><td>Oct 1, 2026</td><td>estimate 39.10</td></tr><tr><td>Sep 1, 2023</td><td>29.00</td></tr></table>"""
     s = market.parse_multpl(html)
     assert list(s.index.strftime("%Y-%m")) == ["2023-09", "2026-10", "2026-11"]
-    assert s.iloc[-1] == pytest.approx(39.93)
+    assert s.iloc[-1] == pytest.approx(39.95)  # today's value wins over the 1st of the month
     shiller = pd.DataFrame({"price": [100.0], "earnings": [5.0], "dividends": [1.0], "cape": [30.0]},
                            index=pd.to_datetime(["2023-09-01"]))
     empty = pd.Series(dtype=float)
     v = market.valuation(shiller, empty, empty, empty, recent_cape=s)
     assert v.loc["2023-09-01", "cape"] == pytest.approx(29.0)  # multpl wins
-    assert v.loc["2026-11-01", "cape"] == pytest.approx(39.93)
+    assert v.loc["2026-11-01", "cape"] == pytest.approx(39.95)
     assert v.loc["2023-09-01", "pe_shiller"] == pytest.approx(20.0)

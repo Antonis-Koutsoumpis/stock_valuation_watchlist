@@ -47,8 +47,11 @@ def parse_multpl(html: str) -> pd.Series:
     table = pd.read_html(io.StringIO(html))[0]
     table.columns = ["date", "value"]
     values = pd.to_numeric(table["value"].astype(str).str.extract(r"(-?\d+(?:\.\d+)?)")[0], errors="coerce")
-    dates = pd.to_datetime(table["date"], errors="coerce").dt.to_period("M").dt.to_timestamp()
-    return pd.Series(values.values, index=pd.DatetimeIndex(dates, name="date")).dropna().sort_index()
+    dates = pd.to_datetime(table["date"], errors="coerce")
+    s = pd.Series(values.values, index=pd.DatetimeIndex(dates, name="date")).dropna().sort_index()
+    # The current month appears twice (today's value and the 1st of the month): keep the latest.
+    s.index = s.index.to_period("M").to_timestamp()
+    return s[~s.index.duplicated(keep="last")]
 
 
 def fetch_multpl(page: str) -> pd.Series:
@@ -150,7 +153,8 @@ def load_valuation() -> pd.DataFrame:
         return df.iloc[:, 0] if not df.empty else pd.Series(dtype=float)  # column named after the series
     def multpl(name):
         df = _read(f"multpl_{name}.csv")
-        return df.iloc[:, 0] if not df.empty else pd.Series(dtype=float)
+        s = df.iloc[:, 0] if not df.empty else pd.Series(dtype=float)
+        return s[~s.index.duplicated(keep="first")]  # files saved before duplicates were removed
     return valuation(_read("shiller.csv"), series("NCBEILQ027S"), series("GDP"), series("DGS10"),
                      multpl("cape"), multpl("pe"))
 
