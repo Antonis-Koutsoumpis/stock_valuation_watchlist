@@ -374,3 +374,10 @@ def test_multpl_amounts_with_commas_and_sales():
                          sales=s)
     assert v.loc["2023-09-01", "sp500_eps"] == 5.0 and v.loc["2026-06-01", "sp500_eps"] == 6.0
     assert v.loc["2026-06-01", "sp500_sales"] == pytest.approx(1982.09)
+
+
+def test_multpl_values_back_to_nominal_dollars():
+    from rule1 import market
+    cpi = pd.Series([50.0, 100.0], index=pd.to_datetime(["2000-01-01", "2026-09-01"]))
+    real = pd.Series([200.0, 300.0, 310.0], index=pd.to_datetime(["2000-01-01", "2026-09-01", "2026-11-01"]))
+    assert market.nominal(real, cpi).tolist() == pytest.approx([100.0, 300.0, 310.0])

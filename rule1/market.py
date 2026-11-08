@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import requests
 
+from .inflation import load_cpi
 from .store import DATA_DIR
 
 MARKET_DIR = DATA_DIR / "_market"
@@ -130,7 +131,7 @@ def valuation(shiller: pd.DataFrame, equities: pd.Series, gdp: pd.Series, ten_ye
     parts = []
     eps = shiller["earnings"].dropna() if not shiller.empty else pd.Series(dtype=float)
     if recent_eps is not None and not recent_eps.empty:
-        eps = recent_eps.combine_first(eps)
+        eps = eps.combine_first(recent_eps)  # Shiller's own figures where he has them
     if not eps.empty:
         parts.append(eps.rename("sp500_eps"))
     if sales is not None and not sales.empty:
@@ -166,8 +167,20 @@ def load_valuation() -> pd.DataFrame:
         df = _read(f"multpl_{name}.csv")
         s = df.iloc[:, 0] if not df.empty else pd.Series(dtype=float)
         return s[~s.index.duplicated(keep="first")]  # files saved before duplicates were removed
+    cpi = load_cpi()
     return valuation(_read("shiller.csv"), series("NCBEILQ027S"), series("GDP"), series("DGS10"),
-                     multpl("cape"), multpl("pe"), multpl("eps"), multpl("sales"))
+                     multpl("cape"), multpl("pe"), nominal(multpl("eps"), cpi), nominal(multpl("sales"), cpi))
+
+
+def nominal(values: pd.Series, cpi: pd.Series) -> pd.Series:
+    """multpl.com shows earnings and sales in today's dollars; back to the dollars of each month,
+    like Shiller's figures and the index price. Months without CPI are dropped (before 1947) or use
+    the latest CPI (the last month or two)."""
+    if values.empty or cpi.empty:
+        return pd.Series(dtype=float)
+    month_cpi = cpi.reindex(values.index)
+    month_cpi = month_cpi.where(values.index <= cpi.index[-1], cpi.iloc[-1])
+    return (values * month_cpi / cpi.iloc[-1]).dropna()
 
 
 def for_days(values: pd.DataFrame, days: pd.DatetimeIndex) -> pd.DataFrame:
