@@ -408,6 +408,12 @@ def stock_page():
         xaxis=dict(domain=[0.08, 0.92], range=[x_start, end + pd.Timedelta(days=1)],
 ))
     st.plotly_chart(fig, use_container_width=True)
+    if len(selected) + len(levels) > 1:
+        st.caption("Each variable has its own axis (left or right), scaled to fill the graph, so the axes are not "
+                   "comparable: a line drawn above or below another means nothing. Read each line against its own "
+                   "axis and its own history (e.g. with Average lines), and compare how the lines move: rising "
+                   "together, one rising while the other is flat, and so on. Indices drawn as dashed lines are "
+                   "scaled to the Price and do share its axis.")
 
     if compare:
         perf_chart(ticker, compare, names, start, end)
