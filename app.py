@@ -499,7 +499,7 @@ def market_table():
         "More expensive than": st.column_config.Column(
             help="Share of all past months (or quarters) that were cheaper than today. 90% = more expensive "
                  "than 90% of history.")})
-    st.caption("Sources: Robert Shiller (Yale) for CAPE and P/E, FRED for the Buffett indicator and bond yields. "
+    st.caption("Sources: Robert Shiller (Yale) and multpl.com (recent months) for CAPE and P/E, FRED for the Buffett indicator and bond yields. "
                "Trailing and forward P/E above are from the SPY ETF on Yahoo, stored daily from now on.")
 
 
