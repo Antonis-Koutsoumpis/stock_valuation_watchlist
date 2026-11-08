@@ -59,22 +59,28 @@ DAILY = {
         "CAPE (Shiller P/E)",
         "S&P 500 price ÷ the average of the last 10 years of earnings, adjusted for inflation. Smooths out "
         "booms and recessions; high values have been followed by low returns over the next 10 years. "
+        "For buying: LOWER is better (below its long-term average of about 17 = cheap). "
         "Source: Robert Shiller (Yale) and multpl.com for recent months.", "Monthly"),
     "pe_shiller": Metric(
         "S&P 500 P/E (12 months)",
         "S&P 500 price ÷ reported earnings of the last 12 months, since 1871. Source: Robert Shiller (Yale) and multpl.com; "
-        "earnings arrive a few months late.", "Monthly"),
+        "earnings arrive a few months late. For buying: LOWER is better (below its long-term average of about 16 "
+        "= cheap). Jumps up in recessions because earnings fall, so check it together with CAPE.", "Monthly"),
     "buffett": Metric(
         "Buffett indicator",
         "Market value of US non-financial companies ÷ US GDP (yearly economic output). Above its long-term average = "
-        "stocks are expensive compared with the economy. Source: FRED (US Federal Reserve).",
+        "stocks are expensive compared with the economy. For buying: LOWER is better. "
+        "Source: FRED (US Federal Reserve).",
         "Quarterly, about 3 months late", percent=True),
     "earnings_yield_gap": Metric(
         "Earnings yield − 10y bond yield",
         "1 ÷ P/E (what the S&P 500 earns per 100 invested) minus the 10-year US Treasury yield. Low or "
-        "negative = stocks pay little extra over safe bonds, i.e. expensive.", "Monthly", percent=True),
+        "negative = stocks pay little extra over safe bonds, i.e. expensive. For buying: HIGHER is better.",
+        "Monthly", percent=True),
     "ten_year_yield": Metric(
-        "10-year Treasury yield", "Interest on 10-year US government bonds. Source: FRED.", "Daily", percent=True),
+        "10-year Treasury yield",
+        "Interest on 10-year US government bonds. For buying stocks: LOWER is better, because high bond yields "
+        "make safe bonds a strong alternative and usually weigh on stock prices. Source: FRED.", "Daily", percent=True),
 }
 
 QUARTERLY = {
