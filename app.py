@@ -18,7 +18,8 @@ DCF_LINE = "rgba(46, 139, 87, 0.9)"
 COMPARE_COLORS = ["#2ca02c", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
 CALC_FILL = "rgba(255, 140, 0, 0.18)"
 CALC_LINE = "rgba(230, 120, 0, 0.95)"
-PERIOD_YEARS = {"1y": 1, "3y": 3, "5y": 5, "10y": 10, "20y": 20, "All": None, "Custom": None}
+PERIODS = {"1w": pd.DateOffset(weeks=1), "1m": pd.DateOffset(months=1), "6m": pd.DateOffset(months=6),
+           **{f"{n}y": pd.DateOffset(years=n) for n in (1, 3, 5, 10, 20)}, "All": None, "Custom": None}
 REAL = " real"
 NOT_PRICES = {"VIX"}  # a volatility level, not a price: no inflation adjustment or scaling onto a stock
 YEAR_BAR_WIDTH = 300 * 24 * 3600 * 1000  # ms
@@ -187,7 +188,7 @@ def stock_page():
     first, last_day = daily_df.index.min().date(), daily_df.index.max().date()
     default_start = max(first, (pd.Timestamp(last_day) - pd.DateOffset(years=5)).date())
     period = st.segmented_control(
-        "Time range", list(PERIOD_YEARS), default="5y", key="period",
+        "Time range", list(PERIODS), default="5y", key="period",
         help="The graph, Price CAGR, Total growth, trend and average lines all follow this. "
              "Custom: pick your own dates.") or "5y"
     if period == "Custom":
@@ -196,8 +197,8 @@ def stock_page():
                       else (pd.Timestamp(default_start), pd.Timestamp(last_day)))
     else:
         end = pd.Timestamp(last_day)
-        years = PERIOD_YEARS[period]
-        start = max(pd.Timestamp(first), end - pd.DateOffset(years=years)) if years else pd.Timestamp(first)
+        offset = PERIODS[period]
+        start = max(pd.Timestamp(first), end - offset) if offset is not None else pd.Timestamp(first)
 
     log_scale = st.sidebar.radio("Scale", ["Raw", "Logarithmic"], horizontal=True) == "Logarithmic"
     has_daily_metric = any(m in DAILY and m != "close" for m in selected)
@@ -270,8 +271,8 @@ def stock_page():
     years = (own.index[-1] - own.index[0]).days / 365.25 if len(own) > 1 else 0
     cagr = (1 + total) ** (1 / years) - 1 if total is not None and years >= 0.95 and total > -1 else None
     span = f"{own.index[0]:%d %b %Y} to {own.index[-1]:%d %b %Y}" if len(own) > 1 else ""
-    label = f" ({years:.0f}y)" if years >= 0.95 else ""
-    cols[4].metric(f"Price CAGR{label}", fmt(cagr, percent=True),
+    label = f" ({period})" if PERIODS.get(period) is not None else f" ({years:.0f}y)" if years >= 0.95 else ""
+    cols[4].metric(f"Price CAGR{label if cagr is not None else ''}", fmt(cagr, percent=True),
                    help=f"Average price growth per year over the chosen time range ({span}), "
                         "without dividends. Shown for 1 year or longer.")
     total_text = f"×{1 + total:,.0f}" if total is not None and total >= 9 else fmt(total, percent=True)
