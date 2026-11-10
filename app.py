@@ -329,14 +329,12 @@ def stock_page():
             if overlays and len(own) > 1:
                 name = f"{meta.label} ({own.iloc[-1] / own.iloc[0] - 1:+.0%} in the time range)"
         if metric in QUARTERLY:
-            # Each bar covers its own quarter (or year) from edge to edge, so it lines up with the
-            # price line; the latest bar runs on to today, because it stays the latest value until
-            # the next report. Several quarterly metrics share the space side by side.
+            # Each bar covers exactly its own quarter (or year), so it lines up with the dates of the
+            # price line; after the latest reported quarter the bars stop. Several quarterly metrics
+            # share the space side by side.
             freq = "Y" if metric in yearly_only else "Q"
             left = pd.DatetimeIndex([d.to_period(freq).start_time for d in s.index])
             right = pd.DatetimeIndex([(d.to_period(freq) + 1).start_time for d in s.index])
-            if len(right):
-                right = right[:-1].append(pd.DatetimeIndex([max(right[-1], end + pd.Timedelta(days=1))]))
             n, k = len(bar_metrics), bar_metrics.index(metric)
             span_ms = (right - left).total_seconds().to_numpy() * 1000
             width = span_ms / n - BAR_GAP / n
