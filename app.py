@@ -22,8 +22,7 @@ PERIODS = {"1w": pd.DateOffset(weeks=1), "1m": pd.DateOffset(months=1), "6m": pd
            **{f"{n}y": pd.DateOffset(years=n) for n in (1, 3, 5, 10, 20)}, "All": None, "Custom": None}
 REAL = " real"
 NOT_PRICES = {"VIX"}  # a volatility level, not a price: no inflation adjustment or scaling onto a stock
-YEAR_BAR_WIDTH = 300 * 24 * 3600 * 1000  # ms
-QUARTER_BAR_WIDTH = 75 * 24 * 3600 * 1000  # ms
+BAR_GAP = 4 * 24 * 3600 * 1000  # ms of white space between bars
 
 
 def secret(name: str):
@@ -295,8 +294,9 @@ def stock_page():
                 s = a_df[yearly].dropna() if yearly in a_df else pd.Series(dtype=float)
                 s.index = pd.DatetimeIndex([pd.Timestamp(f"{y}-07-01") for y in s.index])
                 yearly_only.add(metric)
-                return in_range(s)
+                return in_range(s, pd.Timedelta(days=183))
             s.index = pd.DatetimeIndex([quarter_mid(p) for p in s.index])
+            return in_range(s, pd.Timedelta(days=46))  # keep a quarter that is only partly in the range
         else:
             s = daily_df[metric].dropna()
             if quarterly_mode and metric != "close":
@@ -304,8 +304,8 @@ def stock_page():
                 s.index = pd.DatetimeIndex([quarter_mid(str(p)) for p in s.index])
         return in_range(s)
 
-    def in_range(s: pd.Series) -> pd.Series:
-        return s[(s.index >= start) & (s.index <= end + pd.Timedelta(days=1))]
+    def in_range(s: pd.Series, margin: pd.Timedelta = pd.Timedelta(0)) -> pd.Series:
+        return s[(s.index + margin >= start) & (s.index <= end + pd.Timedelta(days=1))]
 
     levels = [t for t in shown_indices if t in NOT_PRICES]  # own axis, not scaled to the stock
     overlays = list(dict.fromkeys([t for t in [*shown_indices, *compare] if t not in NOT_PRICES]))
@@ -329,11 +329,19 @@ def stock_page():
             if overlays and len(own) > 1:
                 name = f"{meta.label} ({own.iloc[-1] / own.iloc[0] - 1:+.0%} in the time range)"
         if metric in QUARTERLY:
-            # Bars side by side when several quarterly metrics are shown.
-            width = (YEAR_BAR_WIDTH if metric in yearly_only else QUARTER_BAR_WIDTH) / len(bar_metrics)
-            k = bar_metrics.index(metric)
+            # Each bar covers its own quarter (or year) from edge to edge, so it lines up with the
+            # price line; the latest bar runs on to today, because it stays the latest value until
+            # the next report. Several quarterly metrics share the space side by side.
+            freq = "Y" if metric in yearly_only else "Q"
+            left = pd.DatetimeIndex([d.to_period(freq).start_time for d in s.index])
+            right = pd.DatetimeIndex([(d.to_period(freq) + 1).start_time for d in s.index])
+            if len(right):
+                right = right[:-1].append(pd.DatetimeIndex([max(right[-1], end + pd.Timedelta(days=1))]))
+            n, k = len(bar_metrics), bar_metrics.index(metric)
+            span_ms = (right - left).total_seconds().to_numpy() * 1000
+            width = span_ms / n - BAR_GAP / n
             fig.add_trace(go.Bar(
-                x=s.index, y=s.values, yaxis=axis, width=width, offset=-width * len(bar_metrics) / 2 + k * width,
+                x=left, y=s.values, yaxis=axis, width=width, offset=BAR_GAP / 2 + k * (span_ms / n),
                 name=(f"{YEARLY[metric.removesuffix('_ttm')].label} (yearly; no quarterly data)"
                       if metric in yearly_only and metric.removesuffix("_ttm") in YEARLY else name),
                 marker_color=color, opacity=0.45, cliponaxis=False,
