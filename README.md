@@ -51,3 +51,7 @@ python -m rule1.update      # fetch data
 streamlit run app.py        # open the app
 python -m pytest            # tests
 ```
+
+## License
+
+Free for personal and other noncommercial use under the [PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use is not allowed without permission. Market data comes from Yahoo Finance, FRED, multpl.com and Robert Shiller and remains under their own terms.
