@@ -625,3 +625,9 @@ st.navigation([
     st.Page(stock_page, title="Stock", icon=":material/show_chart:", default=True),
     st.Page(screener_page, title="Screener", icon=":material/filter_alt:", url_path="screener"),
 ]).run()
+
+st.divider()
+st.caption("Free for personal, noncommercial use under the "
+           "[PolyForm Noncommercial License 1.0.0]"
+           "(https://github.com/Antonis-Koutsoumpis/stock_valuation_watchlist/blob/main/LICENSE). "
+           "Commercial use is not allowed without permission. For information only, not investment advice.")
