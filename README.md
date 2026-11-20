@@ -1,4 +1,7 @@
-The repository is linked to the Streamlit app [Stock valuation watchlist](https://stock-valuation-watchlist.streamlit.app).
+The repository is linked to two versions of the app, with the same data and calculations:
+
+- **Web app (works on phones and desktop):** [Stock valuation watchlist (GitHub Pages)](https://antonis-koutsoumpis.github.io/stock_valuation_watchlist/). It can be installed on a phone's home screen (iPhone: *Share → Add to Home Screen*; Android: menu ⋮ → *Install app*) and works offline with the stocks you opened before.
+- **Streamlit app:** [Stock valuation watchlist](https://stock-valuation-watchlist.streamlit.app).
 
 # Stock valuation watchlist
 
@@ -19,6 +22,11 @@ shows it.
   sites you entered, and a calculated value (FCF DCF, EPS DCF and Rule #1 Sticker Price, each
   conservative/middle/optimistic; `rule1/valuation.py`).
 
+- **Web app** (`docs/`): the same Stock and Screener pages in plain HTML, CSS and JavaScript (Plotly charts).
+  After every daily update, `.github/workflows/pages.yml` builds its data with `python -m rule1.export_web`
+  (the same code as the Streamlit app) and publishes it on GitHub Pages. The calculated value is worked out in
+  the browser (a JavaScript copy of `rule1/valuation.py`), so its sliders work without a server.
+
 ## Files
 
 | Path | What it holds |
@@ -30,6 +38,8 @@ shows it.
 | `data/<TICKER>/annual.csv` | Fiscal-year statement values |
 | `data/_manual_backup/` | Daily copy of the manual-entry sheet |
 | `templates/manual_entries_template.xlsx` | Fixed layout for manual entries |
+| `docs/` | Web app for GitHub Pages; `docs/data/` is built by the Pages workflow and not stored in the repository |
+| `rule1/export_web.py` | Builds the web app's data files (one JSON file per stock, the screener table, the glossary) |
 
 ## Definitions
 
@@ -43,12 +53,19 @@ shows it.
 - `SEC_CONTACT_EMAIL`: required by the SEC for its free data
 - `MANUAL_SHEET_ID`: the Google Sheet with manual entries (shared as "anyone with the link can view")
 
+## Web app on GitHub Pages (one-time setup)
+
+In the repository on GitHub go to **Settings → Pages → Build and deployment** and set **Source** to
+**GitHub Actions**. Then run the workflow **Publish web app** once from the **Actions** tab (or wait for the next
+daily update). The app is then live at https://antonis-koutsoumpis.github.io/stock_valuation_watchlist/.
+
 ## Run locally
 
 ```
 pip install -r requirements.txt
 python -m rule1.update      # fetch data
 streamlit run app.py        # open the app
+python -m rule1.export_web  # build the web app's data, then: cd docs && python -m http.server
 python -m pytest            # tests
 ```
 

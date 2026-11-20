@@ -2,3 +2,6 @@ __pycache__/
 .pytest_cache/
 .streamlit/secrets.toml
 manual/
+
+# web app data: built by .github/workflows/pages.yml (python -m rule1.export_web)
+docs/data/

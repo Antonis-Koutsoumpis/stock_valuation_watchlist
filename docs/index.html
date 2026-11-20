@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rule #1 Watchlist</title>
+<meta name="description" content="Stock valuation watchlist with Phil Town's Rule #1 numbers, updated every trading day.">
+<meta name="theme-color" content="#1f4e8c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Watchlist">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <button id="menuBtn" class="icon-btn" aria-label="Graph and valuation settings" aria-controls="settings" aria-expanded="false">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <span class="menu-label">Settings</span>
+  </button>
+  <h1 id="title">Rule #1 Watchlist</h1>
+</header>
+<nav class="tabs top" role="tablist">
+  <button role="tab" data-page="stock" aria-selected="true">📈 <span>Stock</span></button>
+  <button role="tab" data-page="screener" aria-selected="false">🔎 <span>Screener</span></button>
+</nav>
+
+<div class="layout">
+  <aside id="settings" class="settings" aria-label="Settings">
+    <div class="settings-head">
+      <h2>Stock</h2>
+      <button id="closeSettings" class="icon-btn close" aria-label="Close settings">✕</button>
+    </div>
+    <label class="field">Find a stock
+      <input id="stockFilter" class="search-input" type="search" placeholder="Type a name or ticker" autocomplete="off">
+      <select id="stock"></select>
+    </label>
+    <p class="hint">Indices are also available adjusted for inflation (in today's dollars, using US consumer prices from FRED).</p>
+
+    <h3>Graph</h3>
+    <details class="field" id="varsBox" open>
+      <summary>Variables <span class="muted" id="varsSummary"></span></summary>
+      <p class="hint" id="varsHelp">Up to 4, each with its own axis.</p>
+      <div class="checklist" id="vars"></div>
+    </details>
+    <details class="field">
+      <summary>Show an index on the graph <span class="muted" id="idxSummary"></span></summary>
+      <p class="hint">Drawn as a dashed line with the Price, scaled so it starts at the stock's price on the first day of the time range. The VIX gets its own axis.</p>
+      <div class="checklist" id="shownIdx"></div>
+    </details>
+    <div class="field">Scale <div class="chips" id="scale"></div></div>
+    <div class="field">Daily metrics (other than Price) <div class="chips" id="freq"></div>
+      <p class="hint">Quarterly average shows one point per quarter. The price is always a daily line; quarterly metrics such as Revenue are bars.</p></div>
+    <label class="check"><input type="checkbox" id="barValues"> Show values on bars</label>
+    <div class="field">Trend lines <div class="chips" id="trends"></div>
+      <p class="hint">Linear: straight line. Polynomial: a curve that can bend. Log: constant growth per year (the legend shows the yearly growth).</p></div>
+    <label class="field" id="degreeBox" hidden>Polynomial degree: <span id="degreeVal">2</span><input type="range" id="degree" min="2" max="5" value="2"></label>
+    <div class="field">Average lines <div class="chips" id="averages"></div>
+      <p class="hint">Dotted line at the average over the last 5 or 10 years of the time range.</p></div>
+    <div class="field" id="avgForBox" hidden>Average lines for <div class="chips" id="avgFor"></div></div>
+    <label class="check"><input type="checkbox" id="showDcf"> Show DCF range boxes (from the sites)</label>
+
+    <h3>Compare</h3>
+    <details class="field">
+      <summary>Compare with (stocks or indices) <span class="muted" id="cmpSummary"></span></summary>
+      <input id="cmpFilter" class="search-input" type="search" placeholder="Filter" autocomplete="off">
+      <div class="checklist" id="compare"></div>
+    </details>
+
+    <h3>Calculated value</h3>
+    <label class="field">Growth years (before the terminal value): <b id="horizonVal">10</b><input type="range" id="horizon" min="5" max="10" value="10"></label>
+    <label class="field">Discount rate (%): <b id="discountVal">10.0</b><input type="range" id="discount" min="6" max="15" step="0.5" value="10"></label>
+    <label class="field">Your growth rate (%) <input type="number" id="ownGrowth" min="0" max="30" step="1" placeholder="From the data"></label>
+    <p class="hint">Empty: the median of the stock's 5- and 10-year growth and the analysts' estimate, between 0% and 20%. A typed rate is the middle scenario (conservative 3% lower, optimistic 3% higher).</p>
+    <label class="check"><input type="checkbox" id="showCalc"> Show calculated value boxes</label>
+    <button id="applySettings" class="btn primary full only-mobile">Show the graph</button>
+  </aside>
+  <div id="backdrop" class="backdrop" hidden></div>
+
+  <main id="main">
+    <div id="loading" class="loading">Loading…</div>
+    <section id="page-stock" hidden></section>
+    <section id="page-screener" hidden></section>
+    <footer class="footer">
+      Free for personal, noncommercial use under the
+      <a href="https://github.com/Antonis-Koutsoumpis/stock_valuation_watchlist/blob/main/LICENSE">PolyForm Noncommercial License 1.0.0</a>.
+      Commercial use is not allowed without permission. For information only, not investment advice. ·
+      <a href="https://github.com/Antonis-Koutsoumpis/stock_valuation_watchlist">GitHub</a>
+    </footer>
+  </main>
+</div>
+<script src="vendor/plotly-basic.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
