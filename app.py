@@ -212,7 +212,8 @@ def stock_page():
     trends = st.sidebar.multiselect(
         "Trend lines", charts.TRENDS,
         help="Linear: straight line. Polynomial: a curve that can bend. "
-             "Log: constant growth per year (a straight line on a log scale); the legend shows the yearly growth.")
+             "Logarithmic: rises quickly at first, then flattens out. "
+             "Exponential: constant growth per year (a straight line on a log scale); the legend shows the yearly growth.")
     degree = st.sidebar.slider("Polynomial degree", 2, 5, 2) if "Polynomial" in trends else 2
     averages = st.sidebar.multiselect(
         "Average lines", [5, 10], format_func=lambda y: f"{y}-year average",

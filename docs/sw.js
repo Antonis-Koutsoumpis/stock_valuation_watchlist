@@ -1,7 +1,7 @@
 /* Service worker: offline use and installation.
  * Network first: when online, the newest version from GitHub is always shown (and saved);
  * the saved copy is used only when offline. */
-const CACHE = "watchlist-v2";
+const CACHE = "watchlist-v3";
 const FILES = ["./", "index.html", "style.css", "app.js", "manifest.webmanifest", "vendor/plotly-basic.min.js",
   "data/watchlist.json", "data/glossary.json", "data/cpi.json", "data/screener.json",
   "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png"];

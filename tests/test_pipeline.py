@@ -157,9 +157,13 @@ def test_trend_lines():
     from rule1 import charts
     idx = pd.date_range("2016-01-01", periods=11, freq="YS")
     grow = pd.Series(100 * 1.1 ** np.arange(11), index=idx)
-    fitted, label = charts.trend(grow, "Log")
+    fitted, label = charts.trend(grow, "Exponential")
     assert fitted.iloc[-1] == pytest.approx(grow.iloc[-1], rel=1e-3)
     assert "+10.0%/yr" in label
+    x = (idx - idx[0]).days.to_numpy() / 365.25
+    flat = pd.Series(5 + 3 * np.log(x + 1 / 12), index=idx)
+    fitted, label = charts.trend(flat, "Logarithmic")
+    assert fitted.values == pytest.approx(flat.values) and label == "logarithmic trend"
     line = pd.Series(np.arange(11) * 2.0 + 1, index=idx)
     fitted, _ = charts.trend(line, "Linear")
     assert fitted.values == pytest.approx(line.values, abs=0.05)

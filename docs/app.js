@@ -181,13 +181,17 @@ function polyfit(x, y, deg) {
   return { evalAt, slope: deg === 1 ? a[1] / h : NaN };
 }
 function trend(s, kind, degree) {
-  let ser = kind === "Log" ? filterS(s, (t, v) => v > 0) : s;
+  let ser = kind === "Exponential" ? filterS(s, (t, v) => v > 0) : s;
   if (ser.t.length < Math.max(3, degree + 1)) return null;
   const x = ser.t.map((t) => (t - ser.t[0]) / DAY / 365.25);
   if (kind === "Linear") { const f = polyfit(x, ser.v, 1); return { t: ser.t, v: x.map(f.evalAt), label: `linear trend (${f.slope >= 0 ? "+" : ""}${nf(2).format(f.slope)}/yr)` }; }
   if (kind === "Polynomial") { const f = polyfit(x, ser.v, degree); return { t: ser.t, v: x.map(f.evalAt), label: `polynomial trend (degree ${degree})` }; }
+  if (kind === "Logarithmic") { // t starts one month in, so ln(t) exists at the first point
+    const lx = x.map((v) => Math.log(v + 1 / 12)), f = polyfit(lx, ser.v, 1);
+    return { t: ser.t, v: lx.map(f.evalAt), label: "logarithmic trend" };
+  }
   const f = polyfit(x, ser.v.map(Math.log), 1), growth = Math.exp(f.slope) - 1;
-  return { t: ser.t, v: x.map((v) => Math.exp(f.evalAt(v))), label: `log trend (${growth >= 0 ? "+" : ""}${nf(1).format(growth * 100)}%/yr)` };
+  return { t: ser.t, v: x.map((v) => Math.exp(f.evalAt(v))), label: `exponential trend (${growth >= 0 ? "+" : ""}${nf(1).format(growth * 100)}%/yr)` };
 }
 function trailingAverage(s, years) {
   if (!s.t.length) return null;
@@ -295,7 +299,7 @@ function renderStockSidebar() {
   chips("#freq", ["Daily", "Quarterly average"], (v) => (v === "Quarterly average") === SP.quarterly, (v) => { SP.quarterly = v === "Quarterly average"; });
   $("#freq").querySelectorAll(".chip").forEach((c) => { c.disabled = !SP.selected.some((m) => G.daily[m] && m !== "close"); });
   $("#barValues").checked = SP.barValues; $("#barValues").disabled = !SP.selected.some((m) => G.quarterly[m]);
-  chips("#trends", ["Linear", "Polynomial", "Log"], (v) => SP.trends.includes(v), (v) => { SP.trends = SP.trends.includes(v) ? SP.trends.filter((x) => x !== v) : [...SP.trends, v]; });
+  chips("#trends", ["Linear", "Polynomial", "Logarithmic", "Exponential"], (v) => SP.trends.includes(v), (v) => { SP.trends = SP.trends.includes(v) ? SP.trends.filter((x) => x !== v) : [...SP.trends, v]; });
   $("#degreeBox").hidden = !SP.trends.includes("Polynomial");
   chips("#averages", [5, 10], (v) => SP.averages.includes(v), (v) => { SP.averages = SP.averages.includes(v) ? SP.averages.filter((x) => x !== v) : [...SP.averages, v]; }, (y) => `${y}-year average`);
   if (SP.avgFor == null || SP.avgFor.some((m) => !SP.selected.includes(m))) {
