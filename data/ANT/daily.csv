@@ -1,0 +1,6 @@
+date,close,adj_close,volume,trailing_pe_yahoo,forward_pe_yahoo,peg_5y_yahoo,price_sales_yahoo,price_book_yahoo,trailing_div_yield_yahoo,payout_ratio_yahoo,forward_div_yield_yahoo
+2026-11-19,97.17,97.17,857312300,,,,,,,,
+2026-11-20,88.91,88.91,400460300,,,,,,,,
+2026-11-23,87.64,87.64,254101700,,,,,,,,
+2026-11-24,81.91,81.91,313046200,,,,,,,,
+2026-11-25,83.2725,83.2725,202903312,,162.543,,31.5479,-1.22204,0,,
