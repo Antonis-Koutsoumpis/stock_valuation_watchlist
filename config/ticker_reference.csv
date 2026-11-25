@@ -16,7 +16,7 @@ AMGN,Amgen Inc.,NASDAQ,NASDAQ:AMGN,AMGN,USD,stock,ok
 AMUN,Amundi S.A.,EPA,EPA:AMUN,AMUN.PA,EUR,stock,ok
 AMZN,"Amazon.com, Inc.",NASDAQ,NASDAQ:AMZN,AMZN,USD,stock,ok
 ANET,"Arista Networks, Inc.",NYSE,NYSE:ANET,ANET,USD,stock,ok
-ANT,Anthropic PBC,NASDAQ,NASDAQ:ANT,ANT,USD,stock,
+ANT,Anthropic PBC,NASDAQ,NASDAQ:ANT,ANT,USD,stock,ok
 ARM,Arm Holdings plc,NASDAQ,NASDAQ:ARM,ARM,USD,stock,ok
 ASML,ASML Holding N.V.,AMS,AMS:ASML,ASML.AS,EUR,stock,ok
 AVGO,Broadcom Inc.,NASDAQ,NASDAQ:AVGO,AVGO,USD,stock,ok
@@ -112,7 +112,7 @@ SNDK,Sandisk Corporation,NASDAQ,NASDAQ:SNDK,SNDK,USD,stock,ok
 SNOW,Snowflake Inc.,NYSE,NYSE:SNOW,SNOW,USD,stock,ok
 SNPS,"Synopsys, Inc.",NASDAQ,NASDAQ:SNPS,SNPS,USD,stock,ok
 SOFI,"SoFi Technologies, Inc.",NASDAQ,NASDAQ:SOFI,SOFI,USD,stock,ok
-SPCX,Space Exploration Technologies Corp.,NASDAQ,NASDAQ:SPCX,SPCX,USD,stock,
+SPCX,Space Exploration Technologies Corp.,NASDAQ,NASDAQ:SPCX,SPCX,USD,stock,ok
 SPGI,S&P Global Inc.,NYSE,NYSE:SPGI,SPGI,USD,stock,ok
 SPOT,Spotify Technology S.A.,NYSE,NYSE:SPOT,SPOT,USD,stock,reports in EUR
 SU,Schneider Electric S.E.,EPA,EPA:SU,SU.PA,EUR,stock,ok
