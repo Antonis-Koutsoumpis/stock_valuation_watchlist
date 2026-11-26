@@ -3,7 +3,7 @@
     python -m rule1.export_web [output folder]      # default: docs/data
 
 Writes one JSON file per watchlist entry (stocks/<TICKER>.json) plus watchlist.json,
-glossary.json, screener.json and cpi.json. The GitHub Action .github/workflows/pages.yml
+glossary.json, screener.json, cpi.json and bear_markets.json. The GitHub Action .github/workflows/pages.yml
 runs this after every daily update and publishes docs/ with these files, so the web app
 shows the same numbers as the Streamlit app.
 
@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 
 from . import build, inflation, manual, market, metrics, screener, valuation
+from .bear_markets import BEAR_MARKETS
 from .glossary import CAGR_HELP, DAILY, DCF, QUARTERLY, YEARLY
 from .metrics import ANNUAL_REPORTING_LAG, REPORTING_LAG
 from .update import load_watchlist
@@ -138,6 +139,9 @@ def main(out_dir: Path):
     cpi = inflation.load_cpi()
     (out_dir / "cpi.json").write_text(json.dumps(
         {d.strftime("%Y-%m"): clean(v) for d, v in cpi.items()}), encoding="utf-8")
+    (out_dir / "bear_markets.json").write_text(json.dumps(
+        [dict(zip(["peak", "trough", "decline", "label", "cause"], b)) for b in BEAR_MARKETS],
+        ensure_ascii=False), encoding="utf-8")
     print(f"web export: {len(rows)} entries written to {out_dir}")
 
 

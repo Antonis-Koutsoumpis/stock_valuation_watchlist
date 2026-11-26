@@ -20,7 +20,9 @@ shows it.
 - **App** (`app.py`): search the watchlist, plot any metrics (raw or log scale, daily or
   averaged per quarter), see Rule #1 growth (CAGR over 1 to 10 years), the DCF range from the
   sites you entered, and a calculated value (FCF DCF, EPS DCF and Rule #1 Sticker Price, each
-  conservative/middle/optimistic; `rule1/valuation.py`).
+  conservative/middle/optimistic; `rule1/valuation.py`). Optionally shades the S&P 500's bear markets
+  (falls of 20% or more, peak to low) in light grey and labels what drove each one
+  (`rule1/bear_markets.py`; add a row when a new one has ended).
 
 - **Web app** (`docs/`): the same Stock and Screener pages in plain HTML, CSS and JavaScript (Plotly charts).
   After every daily update, `.github/workflows/pages.yml` builds its data with `python -m rule1.export_web`

@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from rule1 import build, charts, inflation, manual, market, metrics, screener, valuation
+from rule1.bear_markets import BEAR_HELP, add_bear_markets, bears_in_range
 from rule1.glossary import CAGR_HELP, DAILY, DCF, GRAPH, QUARTERLY, YEARLY, Metric
 from rule1.periods import quarter_end, quarter_start
 from rule1.store import DATA_DIR, read_csv
@@ -227,6 +228,12 @@ def stock_page():
         "Show DCF range boxes (from the sites)", value=False, disabled=dcf_df.empty or "close" not in selected,
         help="One box per quarter from the DCF low end to the high end, with the middle as a line. "
              "Shown with the Price variable.")
+    show_bears = st.sidebar.checkbox("Shade S&P 500 bear markets", key="show_bears", help=BEAR_HELP)
+    show_causes = st.sidebar.checkbox(
+        "Show what drove each bear market", key="show_causes", disabled=not show_bears,
+        help="Labels each grey area with its main cause (e.g. the dot-com bubble, the 2008 financial crisis, a "
+             "war). Hover a label for the dates, the fall and a short explanation; the list is also shown below "
+             "the graph.") and show_bears
 
     st.sidebar.markdown("### Compare")
     indices = index_rows["ticker"].tolist()
@@ -410,6 +417,8 @@ def stock_page():
 
     # The graph starts at the first date with data for the selected variables.
     x_start = max(start, min(first_dates) - pd.Timedelta(days=45)) if first_dates else start
+    if show_bears:
+        add_bear_markets(fig, x_start, end, causes=show_causes)
     fig.update_layout(
         height=580, hovermode="x unified", margin=dict(l=60, r=60, t=40, b=30), barmode="overlay",
         legend=dict(orientation="h", y=-0.28),
@@ -423,8 +432,18 @@ def stock_page():
                    "together, one rising while the other is flat, and so on. Indices drawn as dashed lines are "
                    "scaled to the Price and do share its axis.")
 
+    if show_causes:
+        bears = bears_in_range(x_start, end)
+        with st.expander(f"What drove the S&P 500 bear markets in this time range ({len(bears)})"):
+            if bears.empty:
+                st.caption("No S&P 500 bear market in this time range.")
+            for r in bears.itertuples():
+                st.markdown(f"**{r.label}** · {r.peak:%d %b %Y} – {r.trough:%d %b %Y} · "
+                            f"S&P 500 {r.decline:.1f}%  \n{r.cause}")
+            st.caption("Peak-to-low dates and falls of the S&P 500 (daily closes; Yardeni Research).")
+
     if compare:
-        perf_chart(ticker, compare, names, start, end)
+        perf_chart(ticker, compare, names, start, end, show_bears)
 
     if selected:
         legend_cols = st.columns(len(selected))
@@ -532,7 +551,7 @@ def calculated_value_tab(calc: dict, currency: str, horizon: int, discount: floa
                      use_container_width=True)
 
 
-def perf_chart(ticker, compare, names, start, end):
+def perf_chart(ticker, compare, names, start, end, show_bears=False):
     """Price change in % since the first date all chosen series have in common."""
     log_scale = st.radio("Comparison scale", ["Logarithmic", "Raw"], horizontal=True,
                          help="Logarithmic: the same % growth looks the same at any time, which makes long "
@@ -561,6 +580,8 @@ def perf_chart(ticker, compare, names, start, end):
         margin=dict(l=60, r=30, t=50, b=30), legend=dict(orientation="h", y=-0.15),
         yaxis=dict(title="Growth of 1 (×)" if log_scale else "Change since start",
                    type="log" if log_scale else "linear", tickformat=None if log_scale else ".0%"))
+    if show_bears:
+        add_bear_markets(fig, common_start, end)
     st.plotly_chart(fig, use_container_width=True)
     st.caption("Price change only, without dividends. Starts on the first date all chosen series have data, "
                "within the time range.")

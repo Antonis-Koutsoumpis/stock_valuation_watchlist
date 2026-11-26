@@ -9,7 +9,7 @@ on:
     types: [completed]
   push:
     branches: [main]
-    paths: ["docs/**", "rule1/export_web.py", ".github/workflows/pages.yml"]
+    paths: ["docs/**", "rule1/export_web.py", "rule1/bear_markets.py", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:

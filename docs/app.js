@@ -205,7 +205,9 @@ const SP = {
   page: "stock", ticker: null, selected: ["close"], shownIdx: [], period: "5y", from: null, to: null,
   log: false, quarterly: false, barValues: false, trends: [], degree: 2, averages: [], avgFor: null,
   showDcf: false, compare: [], horizon: 10, discount: 10, ownGrowth: null, showCalc: false, perfLog: true, tab: "Yearly",
+  showBears: false, showCauses: false,
 };
+let BEARS = [];   // S&P 500 bear markets, from data/bear_markets.json (rule1/bear_markets.py)
 let ST = null;   // loaded stock
 let CONDITIONS = null;
 
@@ -223,6 +225,42 @@ function themeLayout(extra = {}) {
 }
 const PLOT_CONFIG = { displaylogo: false, responsive: true, displayModeBar: !TOUCH };
 const X = (t) => ymd(t);
+
+/* ---------------- S&P 500 bear markets (same as add_bear_markets in rule1/bear_markets.py) ---------------- */
+const BEAR_FILL = "rgba(128, 128, 128, 0.18)";
+const bearsIn = (x0, x1) => BEARS.filter((b) => Date.parse(b.trough) >= x0 && Date.parse(b.peak) <= x1);
+/** Breaks text into lines of about n characters (<br>), so a hover box fits on a phone. */
+const wrapText = (text, n) => text.split(" ").reduce((lines, w) => {
+  const last = lines[lines.length - 1];
+  if (last && (last + " " + w).length <= n) lines[lines.length - 1] = last + " " + w; else lines.push(w);
+  return lines;
+}, []).join("<br>");
+/** Plotly shapes (grey areas) and, with causes, labels for the bear markets between x0 and x1 (ms). */
+function bearLayout(x0, x1, causes, widthPx = 0) {
+  const shapes = [], annotations = [];
+  // labels closer than 13 px apart would overlap: keep the first (the list under the chart has them all)
+  const minGap = widthPx ? 13 * (x1 - x0) / widthPx : 0;
+  let lastLabel = -Infinity;
+  for (const b of bearsIn(x0, x1)) {
+    const p = Date.parse(b.peak), t = Date.parse(b.trough);
+    shapes.push({ type: "rect", xref: "x", yref: "paper", x0: b.peak, x1: b.trough, y0: 0, y1: 1, fillcolor: BEAR_FILL, line: { width: 0 }, layer: "below" });
+    if (causes) {
+      const a = Math.max(p, x0), z = Math.min(t, x1), mid = a + (z - a) / 2;
+      if (mid - lastLabel < minGap) continue;
+      lastLabel = mid;
+      annotations.push({ x: ymd(mid), xref: "x", y: 1, yref: "paper", yanchor: "top", text: esc(b.label), textangle: -90, showarrow: false,
+        font: { size: 10, color: "rgba(128, 128, 128, 0.95)" },
+        hovertext: `<b>${esc(b.label)}</b><br>${dateLabel(p)} – ${dateLabel(t)}: ${b.decline.toFixed(1)}%<br>${wrapText(esc(b.cause), 45)}` });
+    }
+  }
+  return { shapes, annotations };
+}
+function bearList(x0, x1) {
+  const list = bearsIn(x0, x1);
+  return `<details class="panel"><summary>What drove the S&amp;P 500 bear markets in this time range (${list.length})</summary>
+    ${list.length ? `<ul class="prose">${list.map((b) => `<li><b>${esc(b.label)}</b> · ${dateLabel(Date.parse(b.peak))} – ${dateLabel(Date.parse(b.trough))} · S&amp;P 500 ${b.decline.toFixed(1)}%<br>${esc(b.cause)}</li>`).join("")}</ul>` : `<p class="caption">No S&amp;P 500 bear market in this time range.</p>`}
+    <p class="caption">Peak-to-low dates and falls of the S&amp;P 500 (daily closes; Yardeni Research).</p></details>`;
+}
 
 /* ---------------- stock page ---------------- */
 function watchOptions() {
@@ -309,6 +347,8 @@ function renderStockSidebar() {
   $("#avgForBox").hidden = !SP.averages.length;
   chips("#avgFor", SP.selected, (m) => SP.avgFor.includes(m), (m) => { SP.avgFor = SP.avgFor.includes(m) ? SP.avgFor.filter((x) => x !== m) : [...SP.avgFor, m]; }, (m) => g[m].label);
   $("#showDcf").checked = SP.showDcf; $("#showDcf").disabled = !st.dcf || !SP.selected.includes("close");
+  $("#showBears").checked = SP.showBears; $("#showBears").disabled = !BEARS.length;
+  $("#showCauses").checked = SP.showCauses; $("#showCauses").disabled = !SP.showBears;
   // compare
   const base = SP.ticker.replace(REAL, "");
   const idxT = WATCH.filter((w) => w.type === "index" && !NOT_PRICES.has(w.ticker)).map((w) => w.ticker);
@@ -391,6 +431,7 @@ async function renderStock() {
     </div></div>
   <div id="mainChart" class="chart main"></div>
   <p class="caption" id="axesNote"></p>
+  <div id="bearInfo"></div>
   <div id="perf"></div>
   <div class="legend-help" id="legendHelp"></div>
   <h2 class="section">Rule #1 numbers (latest year) <abbr class="caption" title="${esc(G.cagr_help)}">ⓘ</abbr></h2>
@@ -535,14 +576,16 @@ async function renderStock() {
   }
   const xStart = firstDates.length ? Math.max(start, Math.min(...firstDates) - 45 * DAY) : start;
   const narrow = window.innerWidth < 700;
+  const bears = SP.showBears ? bearLayout(xStart, end + DAY, SP.showCauses, $("#mainChart").clientWidth * 0.75) : {};
   Plotly.react("mainChart", traces, themeLayout({
-    ...layout, hovermode: "x unified", margin: { l: narrow ? 45 : 60, r: narrow ? 45 : 60, t: 20, b: 30 }, barmode: "overlay",
+    ...layout, ...bears, hovermode: "x unified", margin: { l: narrow ? 45 : 60, r: narrow ? 45 : 60, t: 20, b: 30 }, barmode: "overlay",
     legend: { orientation: "h", y: narrow ? -0.35 : -0.28 },
     xaxis: { type: "date", domain: SP.selected.length + levels.length > 2 ? [0.12, 0.88] : [0.08, 0.92], range: [X(xStart), X(end + DAY)] },
   }), PLOT_CONFIG);
   $("#axesNote").textContent = note || (SP.selected.length + levels.length > 1
     ? "Each variable has its own axis (left or right), scaled to fill the graph, so the axes are not comparable: a line drawn above or below another means nothing. Read each line against its own axis and its own history (e.g. with Average lines), and compare how the lines move. Indices drawn as dashed lines are scaled to the Price and do share its axis." : "");
 
+  $("#bearInfo").innerHTML = SP.showBears && SP.showCauses ? bearList(xStart, end + DAY) : "";
   if (SP.compare.length) await perfChart(st, start, end); else $("#perf").innerHTML = "";
   $("#legendHelp").innerHTML = SP.selected.map((m) => `<details><summary>${esc(g[m].label)}</summary><p class="caption">${esc(g[m].help)} Updated: ${esc(g[m].frequency.toLowerCase())}.</p></details>`).join("");
 
@@ -643,6 +686,7 @@ async function perfChart(st, start, end) {
   Plotly.react("perfChart", traces, themeLayout({
     title: { text: `Performance since ${dateLabel(common)}`, font: { size: 14 } }, hovermode: "x unified",
     margin: { l: 60, r: 20, t: 50, b: 30 }, legend: { orientation: "h", y: narrow ? -0.3 : -0.15 },
+    ...(SP.showBears ? bearLayout(common, end + DAY, false) : {}),
     xaxis: { type: "date" }, yaxis: { title: { text: SP.perfLog ? "Growth of 1 (×)" : "Change since start" }, type: SP.perfLog ? "log" : "linear", tickformat: SP.perfLog ? undefined : ".0%" },
   }), PLOT_CONFIG);
 }
@@ -748,7 +792,8 @@ function fillStockSelect() {
 
 async function init() {
   [WATCH, G, CPI, SCREENER] = await Promise.all([loadJSON("data/watchlist.json"), loadJSON("data/glossary.json"),
-    loadJSON("data/cpi.json").catch(() => ({})), loadJSON("data/screener.json")]);
+    loadJSON("data/cpi.json").catch(() => ({})), loadJSON("data/screener.json"),
+    loadJSON("data/bear_markets.json").then((b) => { BEARS = b; }).catch(() => {})]);
   const hash = decodeURIComponent(location.hash.slice(1));
   const opts = watchOptions();
   let ticker = hash.startsWith("stock=") ? hash.slice(6) : opts[0].value;
@@ -765,6 +810,8 @@ async function init() {
   $("#barValues").onchange = (e) => { SP.barValues = e.target.checked; renderStock(); };
   $("#showDcf").onchange = (e) => { SP.showDcf = e.target.checked; renderStock(); };
   $("#showCalc").onchange = (e) => { SP.showCalc = e.target.checked; renderStock(); };
+  $("#showBears").onchange = (e) => { SP.showBears = e.target.checked; $("#showCauses").disabled = !SP.showBears; renderStock(); };
+  $("#showCauses").onchange = (e) => { SP.showCauses = e.target.checked; renderStock(); };
   $("#degree").oninput = (e) => { SP.degree = +e.target.value; $("#degreeVal").textContent = SP.degree; };
   $("#degree").onchange = () => renderStock();
   $("#horizon").oninput = (e) => { SP.horizon = +e.target.value; $("#horizonVal").textContent = SP.horizon; };
