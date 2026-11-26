@@ -85,10 +85,20 @@ BEAR_MARKETS = [
 
 BEAR_FILL = "rgba(128, 128, 128, 0.18)"
 BEAR_HELP = (
-    "Grey areas: the S&P 500's bear markets — falls of 20% or more from a "
-    "closing high, shaded from the peak to the low (22 since 1928, dates from "
-    "Yardeni Research). They are the US market's bear markets, also when "
-    "another stock or index is shown."
+    "**What is a bear market?** A fall of **20% or more** in a stock market "
+    "index from its last closing high (the *peak*) to the lowest close that "
+    "follows (the *trough*), after which prices rise again. It is measured on "
+    "daily closing prices.\n\n"
+    "**What is shaded:** the period from the peak to the trough, in light "
+    "grey. Smaller falls of 10–20% are called *corrections* and are not "
+    "shaded.\n\n"
+    "**Good to know:** the 20% line is a convention, not a law of nature: "
+    "falls that stopped just short of it (1990, 1998, 2011, 2018 and April "
+    "2025) are not counted. A bear market is only known once its low is "
+    "behind us, so a new one is added afterwards.\n\n"
+    "**Which market:** the S&P 500 (the US market) — 22 bear markets since "
+    "1928, dates from Yardeni Research — also when another stock or index is shown, as a "
+    "reference for the market as a whole."
 )
 
 

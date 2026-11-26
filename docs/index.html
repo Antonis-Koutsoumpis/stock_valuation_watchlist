@@ -60,9 +60,16 @@
       <p class="hint">Dotted line at the average over the last 5 or 10 years of the time range.</p></div>
     <div class="field" id="avgForBox" hidden>Average lines for <div class="chips" id="avgFor"></div></div>
     <label class="check"><input type="checkbox" id="showDcf"> Show DCF range boxes (from the sites)</label>
-    <label class="check"><input type="checkbox" id="showBears"> Shade S&amp;P 500 bear markets</label>
+    <div class="check-row"><label class="check"><input type="checkbox" id="showBears"> Shade S&amp;P 500 bear markets</label>
+      <button type="button" class="help-q" id="bearHelpBtn" aria-expanded="false" aria-controls="bearHelp" aria-label="What is a bear market?">?</button></div>
+    <div class="hint" id="bearHelp" hidden>
+      <p><b>What is a bear market?</b> A fall of <b>20% or more</b> in a stock market index from its last closing high (the <i>peak</i>) to the lowest close that follows (the <i>trough</i>), after which prices rise again. It is measured on daily closing prices.</p>
+      <p><b>What is shaded:</b> the period from the peak to the trough, in light grey. Smaller falls of 10–20% are called <i>corrections</i> and are not shaded.</p>
+      <p><b>Good to know:</b> the 20% line is a convention, not a law of nature: falls that stopped just short of it (1990, 1998, 2011, 2018 and April 2025) are not counted. A bear market is only known once its low is behind us, so a new one is added afterwards.</p>
+      <p><b>Which market:</b> the S&amp;P 500 (the US market) — 22 bear markets since 1928, dates from Yardeni Research — also when another stock or index is shown, as a reference for the market as a whole.</p>
+    </div>
     <label class="check"><input type="checkbox" id="showCauses" disabled> Show what drove each bear market</label>
-    <p class="hint">Grey areas: falls of the S&amp;P 500 of 20% or more, from the closing high to the low (22 since 1928, dates from Yardeni Research), also when another stock or index is shown. The labels name the main cause (e.g. the dot-com bubble, the 2008 financial crisis, a war); the list under the graph explains each one.</p>
+    <p class="hint">Labels each grey area with its main cause (e.g. the dot-com bubble, the 2008 financial crisis, a war); the list under the chart explains each one.</p>
 
     <h3>Compare</h3>
     <details class="field">

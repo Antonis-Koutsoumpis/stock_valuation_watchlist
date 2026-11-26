@@ -270,3 +270,10 @@ th { background: var(--bg); font-weight: 600; }
 @media (max-width: 699px) { .chart.main { height: 520px; } }
 .search-input { width: 100%; padding: 0.5rem 0.6rem; font: inherit; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); margin-top: 0.25rem; }
 th abbr { text-decoration: none; border-bottom: 1px dotted var(--muted); cursor: help; }
+
+/* "?" button that opens the bear-market explanation */
+.check-row { display: flex; align-items: center; gap: 0.4rem; }
+.help-q { width: 1.4rem; height: 1.4rem; flex: none; border-radius: 50%; border: 1px solid var(--line); background: var(--card);
+  color: inherit; font-weight: 700; font-size: 0.8rem; line-height: 1; cursor: pointer; padding: 0; }
+.help-q[aria-expanded="true"] { background: var(--line); }
+#bearHelp p { margin: 0.3rem 0; }

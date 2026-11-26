@@ -812,6 +812,7 @@ async function init() {
   $("#showCalc").onchange = (e) => { SP.showCalc = e.target.checked; renderStock(); };
   $("#showBears").onchange = (e) => { SP.showBears = e.target.checked; $("#showCauses").disabled = !SP.showBears; renderStock(); };
   $("#showCauses").onchange = (e) => { SP.showCauses = e.target.checked; renderStock(); };
+  $("#bearHelpBtn").onclick = (e) => { const box = $("#bearHelp"); box.hidden = !box.hidden; e.currentTarget.setAttribute("aria-expanded", !box.hidden); };
   $("#degree").oninput = (e) => { SP.degree = +e.target.value; $("#degreeVal").textContent = SP.degree; };
   $("#degree").onchange = () => renderStock();
   $("#horizon").oninput = (e) => { SP.horizon = +e.target.value; $("#horizonVal").textContent = SP.horizon; };
